@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "replace-me",
+    "platform": "auto",
+    "root_package": "com.example",
+    "source_application_module": ":app"
+  },
+  "layout": {
+    "feature_root": "feature",
+    "core_root": "core",
+    "utility_root": "util",
+    "feature_layers": ["domain", "data", "navigation", "ui", "test"],
+    "aggregation_module": true,
+    "kmp_shared_source_set": "commonMain",
+    "android_or_jvm_source_set": "main"
+  },
+  "conventions": {
+    "included_build_directory": "build-logic",
+    "plugin_id_prefix": "com.example.convention",
+    "strategy": "base-plus-capabilities"
+  },
+  "features": [
+    {
+      "name": "replace-feature",
+      "package_prefixes": ["com.example.replacefeature"],
+      "path_prefixes": ["app/src/main/kotlin/com/example/replacefeature"],
+      "entry_points": [],
+      "notes": "Replace this object with an approved product boundary."
+    }
+  ],
+  "verification": {
+    "baseline_commands": ["./gradlew check"],
+    "app_compile_commands": ["./gradlew :app:assembleDebug"]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "portable-kotlin-modularization",
+  "description": "Skills and standard-library scripts for incrementally splitting Kotlin/Gradle monoliths into layered feature modules using the target repository's existing stack.",
+  "skills": [
+    "modularize-kotlin-codebase",
+    "audit-kotlin-architecture",
+    "design-gradle-conventions",
+    "migrate-kotlin-feature",
+    "verify-kotlin-modules"
+  ],
+  "install": {
+    "repository_destination": ".agents/skills",
+    "command": "python3 install_skill_pack.py --target /path/to/repository --apply"
+  }
+}

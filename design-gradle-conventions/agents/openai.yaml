@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Gradle Conventions"
+  short_description: "Extract adaptive Gradle convention plugins"
+  default_prompt: "Use $design-gradle-conventions to consolidate this project’s repeated Gradle configuration into convention plugins."

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "directory": "build-logic",
+  "project_name": "build-logic",
+  "group": "com.example.buildlogic",
+  "package": "com.example.buildlogic",
+  "version_catalog": "../gradle/libs.versions.toml",
+  "repositories": ["google()", "mavenCentral()", "gradlePluginPortal()"],
+  "compile_only": [
+    "libs.kotlin.gradle.plugin"
+  ],
+  "plugins": [
+    {
+      "registration_name": "kotlinLibrary",
+      "id": "com.example.convention.kotlin.library",
+      "class_name": "KotlinLibraryConventionPlugin",
+      "applies": ["org.jetbrains.kotlin.jvm"],
+      "body": [
+        "// Configure the target repository's verified toolchain and compiler defaults here."
+      ]
+    },
+    {
+      "registration_name": "featureDomain",
+      "id": "com.example.convention.feature.domain",
+      "class_name": "FeatureDomainConventionPlugin",
+      "applies": ["com.example.convention.kotlin.library"],
+      "body": [
+        "// Add only domain-safe dependencies and test defaults detected in the target repository."
+      ]
+    }
+  ]
+}

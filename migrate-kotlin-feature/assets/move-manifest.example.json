@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "moves": [
+    {
+      "from": "app/src/main/kotlin/com/example/legacy/orders/Order.kt",
+      "to": "feature/orders/domain/src/main/kotlin/com/example/orders/domain/model/Order.kt",
+      "package_from": "com.example.legacy.orders",
+      "package_to": "com.example.orders.domain.model"
+    },
+    {
+      "from": "app/src/main/res/values/orders_strings.xml",
+      "to": "feature/orders/ui/src/main/res/values/orders_strings.xml"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "feature_root": "feature",
+  "core_root": "core",
+  "utility_root": "util",
+  "required_feature_layers": ["domain", "data", "navigation", "ui"],
+  "check_settings_registration": true,
+  "test_support_names": ["test", "test-support", "fixtures"],
+  "module_roles": {
+    "*/domain": "domain",
+    "*/data": "data",
+    "*/navigation": "navigation",
+    "*/ui": "ui",
+    "*/test": "test-support"
+  },
+  "forbidden_target_roles": {
+    "domain": ["data", "navigation", "ui", "app", "test-support"],
+    "data": ["navigation", "ui", "app", "test-support"],
+    "navigation": ["data", "ui", "app", "test-support"],
+    "ui": ["data", "app", "test-support"],
+    "aggregation": ["test-support"]
+  },
+  "cross_feature": {
+    "severity": "warning",
+    "allowed_target_roles": ["domain", "navigation"]
+  },
+  "ignored_paths": [
+    "build",
+    ".gradle",
+    ".git",
+    "generated"
+  ],
+  "ignored_import_prefixes": [],
+  "exceptions": []
+}

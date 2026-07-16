@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "root_package": "com.example",
+  "ignore_paths": [
+    "generated",
+    "vendor"
+  ],
+  "features": [
+    {
+      "name": "orders",
+      "package_prefixes": ["com.example.orders", "com.example.checkout"],
+      "path_prefixes": ["app/src/main/kotlin/com/example/orders"],
+      "include_globs": [],
+      "exclude_globs": []
+    }
+  ],
+  "file_overrides": {
+    "app/src/main/kotlin/com/example/legacy/OrderGateway.kt": {
+      "feature": "orders",
+      "layer": "domain",
+      "reason": "Approved domain port despite its legacy package."
+    }
+  },
+  "shared_assignments": {
+    "app/src/main/kotlin/com/example/time/Clock.kt": "util:time:domain"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "feature": "orders",
+  "base_directory": "feature",
+  "package": "com.example.orders",
+  "platform": "kmp",
+  "aggregation_module": true,
+  "source_set": "commonMain",
+  "test_source_set": "commonTest",
+  "build_file_name": "build.gradle.kts",
+  "layers": {
+    "domain": {
+      "enabled": true,
+      "plugins": ["alias(libs.plugins.example.feature.domain)"],
+      "dependencies": ["implementation(project(\":core:domain\"))"]
+    },
+    "data": {
+      "enabled": true,
+      "plugins": ["alias(libs.plugins.example.feature.data)"],
+      "dependencies": [
+        "implementation(project(\":feature:orders:domain\"))",
+        "implementation(project(\":core:data\"))"
+      ]
+    },
+    "navigation": {
+      "enabled": true,
+      "plugins": ["alias(libs.plugins.example.feature.navigation)"],
+      "dependencies": [
+        "api(project(\":core:navigation\"))",
+        "implementation(project(\":feature:orders:domain\"))"
+      ]
+    },
+    "ui": {
+      "enabled": true,
+      "plugins": ["alias(libs.plugins.example.feature.ui)"],
+      "dependencies": [
+        "implementation(project(\":feature:orders:domain\"))",
+        "implementation(project(\":feature:orders:navigation\"))",
+        "implementation(project(\":core:ui\"))"
+      ]
+    },
+    "test": {
+      "enabled": true,
+      "plugins": ["alias(libs.plugins.example.test.support)"],
+      "dependencies": [
+        "api(project(\":test:core\"))"
+      ]
+    }
+  },
+  "aggregation": {
+    "plugins": ["alias(libs.plugins.example.feature.root)"],
+    "dependencies": [
+      "api(project(\":feature:orders:domain\"))",
+      "implementation(project(\":feature:orders:data\"))",
+      "api(project(\":feature:orders:navigation\"))",
+      "api(project(\":feature:orders:ui\"))"
+    ]
+  },
+  "create_resource_directory": true
+}
