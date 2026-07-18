@@ -20,7 +20,16 @@ Require or derive:
 - app, DI, navigation, resource, generated-code, and test registration points;
 - baseline and layer-local verification commands.
 
-Read [references/feature-migration-procedure.md](references/feature-migration-procedure.md) before moving code. Use [assets/feature-spec.example.json](assets/feature-spec.example.json) for scaffolding and [assets/move-manifest.example.json](assets/move-manifest.example.json) for controlled moves.
+Read [references/feature-migration-procedure.md](references/feature-migration-procedure.md) before moving code. Use [assets/feature-spec.example.json](assets/feature-spec.example.json) for feature scaffolding, [assets/test-foundations-spec.example.json](assets/test-foundations-spec.example.json) for repository-wide test foundations when required, and [assets/move-manifest.example.json](assets/move-manifest.example.json) for controlled moves.
+
+If repository-independent helpers or core-contract fakes already have multiple consumers, scaffold their explicit modules before feature migration:
+
+```bash
+python3 scripts/scaffold_test_foundations.py --root /path/to/repo --spec /path/to/test-foundations.json
+python3 scripts/scaffold_test_foundations.py --root /path/to/repo --spec /path/to/test-foundations.json --apply
+```
+
+Register these modules in settings and consume them only from test source sets/configurations. Do not add them to an app, feature aggregation root, DI graph, or production source set.
 
 ## Scaffold the target shape
 
@@ -36,7 +45,7 @@ Review every build file and dependency, then apply:
 python3 scripts/scaffold_feature.py --root /path/to/repo --spec /path/to/feature-spec.json --apply
 ```
 
-The script creates module build files and source roots but does not edit `settings.gradle*`, app aggregation, DI, or navigation. Apply those edits deliberately because their syntax is project-specific.
+The script creates module build files and source roots but does not edit `settings.gradle*`, app aggregation, DI, or navigation. Apply those edits deliberately because their syntax is project-specific. Put feature test-support dependencies in each layer’s `test_dependencies`; the scaffold renders them into `commonTest` for KMP or expects explicit `testImplementation`-style expressions for Android/JVM.
 
 ## Migration order
 
@@ -89,6 +98,19 @@ Apply it only after all collisions and package changes are reviewed:
 ```bash
 python3 scripts/apply_move_manifest.py --root /path/to/repo --manifest /path/to/moves.json --apply
 ```
+
+For an approved move batch, calculate and add each source file’s lowercase SHA-256 as `expected_sha256`, then apply with `--require-hashes` and a repository-local receipt:
+
+```bash
+python3 scripts/apply_move_manifest.py \
+  --root /path/to/repo \
+  --manifest /path/to/moves.json \
+  --require-hashes \
+  --receipt-out .modularization/receipts/orders-domain-01.json \
+  --apply
+```
+
+Record the receipt in the active work-ledger chunk. Hash preconditions prevent a reviewed manifest from moving a source that changed after review.
 
 The script changes only explicit `package` declarations. Update imports and fully qualified references using repository-aware searches and compiler feedback. Never run broad global replacement across generated, vendored, migration, or serialized data.
 

@@ -126,7 +126,12 @@ Apply the detected compiler/plugin and runtime. Centralize stable compiler flags
 
 ### Tests
 
-Provide language-appropriate unit-test dependencies and tasks. Add shared test foundations only when the dependency graph does not cycle. Keep instrumentation/UI tests separate from portable/common tests.
+Separate two concerns:
+
+- an **owning-module unit-test convention** creates/configures the target project’s portable/JVM/Android/native test source sets and tasks, adds the approved base test libraries, and attaches required tests to `check`;
+- a **test-support library convention** creates a normal library whose main/common source set contains reusable fakes/fixtures, but which is consumed only from test configurations.
+
+Add shared test foundations only when the dependency graph does not cycle. Keep instrumentation/UI tests separate from portable/common tests. Do not add every feature’s support module globally from a base convention; add it only to the owning test source sets that need it.
 
 ## 6. Module application matrix
 
@@ -140,6 +145,8 @@ Provide language-appropriate unit-test dependencies and tasks. Add shared test f
 | feature aggregation | library | DI/aggregation only; child module dependencies |
 | core domain/data/navigation/UI | matching library | only the corresponding capability |
 | app/shared app | app base | feature roots, app DI, environment/release as needed |
+
+The matrix must name both the owning-module test convention and the test-support library convention when reusable support modules are part of the approved architecture.
 
 ## 7. Migration and validation
 

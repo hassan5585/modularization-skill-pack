@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
   "root_package": "com.example",
-  "ignore_paths": [
-    "generated",
-    "vendor"
-  ],
+  "feature_root": "feature",
+  "target_feature_layers": [],
+  "create_feature_test_support": false,
+  "shared_test_modules": [],
+  "foundation_modules": [],
   "features": [
     {
       "name": "orders",
@@ -22,6 +23,6 @@
     }
   },
   "shared_assignments": {
-    "app/src/main/kotlin/com/example/time/Clock.kt": "util:time:domain"
+    "app/src/main/kotlin/com/example/time/Clock.kt": ":util:time:domain"
   }
 }

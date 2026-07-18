@@ -13,6 +13,12 @@ Copy [assets/architecture-rules.example.json](assets/architecture-rules.example.
 
 Every exception must include a narrow source/target, reason, owner, and removal condition. Never add a wildcard exception to make a migration green.
 
+Configure the approved convention included build, every required registered plugin id, and role-to-plugin requirements. Replace every `example.*` value in the asset; never run CI with placeholders. With `validate_included_build_plugins` enabled, the checker also verifies the included build's settings registration, static plugin registrations, implementation-class source files, and duplicate ids. Configure shared test modules only when the plan requires them.
+
+Use `required_feature_layers_by_feature` when features intentionally have different shapes. An exact feature key overrides `required_feature_layers`; `"*"` supplies a default. An explicit empty list documents that a feature has no mandatory child layers. Do not create empty data, navigation, UI, or test modules merely to satisfy a global template.
+
+Leave `direct_project_imports.severity` null unless the target architecture requires every imported module to be a direct Gradle dependency. Enabling it in projects that intentionally expose transitive `api` contracts creates noise rather than a valid boundary rule.
+
 ## Run static verification
 
 ```bash
@@ -33,7 +39,10 @@ The checker validates:
 - cross-feature UI/data coupling;
 - production dependencies on test-support modules;
 - graph cycles;
-- required feature layers when configured;
+- global or per-feature required layers when configured;
+- required shared test-support modules;
+- required convention included builds, their registered subprojects/plugin implementations, and per-role convention plugin use;
+- optional direct-project dependency coverage for production imports;
 - explicit, narrow exceptions.
 
 ## Select build checks
@@ -43,6 +52,8 @@ Generate a reviewable command matrix:
 ```bash
 python3 scripts/suggest_gradle_checks.py --root /path/to/repo --changed feature/orders
 ```
+
+The suggester ignores `.modularization` outputs. When convention plugin names and source sets do not expose a module's platform, add narrow overrides such as `--platform-rule ':feature:legacy:*'=android` or `--platform-rule ':shared'=kmp`. This affects task suggestions only; it does not change architecture findings.
 
 The output is advisory. Prefer tasks proven by CI or `./gradlew tasks` in the target repository. Run checks from narrow to broad:
 

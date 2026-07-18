@@ -23,7 +23,8 @@ Build an evidence-backed model of the codebase before proposing moves. Treat scr
    Add `--root-package com.example` when automatic package inference is wrong. Add repeated `--exclude path` options for generated or vendored trees not covered by defaults.
 
 4. Read [references/classification-heuristics.md](references/classification-heuristics.md), then inspect every low-confidence or unknown classification and every high-coupling candidate.
-5. Copy [assets/audit-overrides.example.json](assets/audit-overrides.example.json), replace all placeholders, and provide it to the planner when package-derived feature names are insufficient.
+   Package-only candidates outside an existing `feature/*` graph remain unresolved until reviewed; this prevents app-shell helpers from silently becoming fake product features.
+5. Copy [assets/audit-overrides.example.json](assets/audit-overrides.example.json), replace all placeholders, and provide it to the planner when package-derived feature names are insufficient. Leave `target_feature_layers` empty to derive only evidenced/existing layers; fill it only after approving a uniform feature shape. Leave `shared_test_modules` and `foundation_modules` empty unless the audit proves those shared targets are required; existing top-level test-support modules are retained automatically when no override is supplied.
 6. Generate a proposed module plan:
 
    ```bash
@@ -101,6 +102,8 @@ Do not infer `core` merely from high fan-in; inspect semantics and volatility.
 Before accepting the plan:
 
 - Account for every source file or explicitly mark it excluded/generated/unknown.
+- Account separately for every detected manifest, UI/resource file, database/network/serialization schema, shrinker rule, and native interop/platform source artifact.
+- Confirm the plan’s source-accounting total equals the audit source count across feature, shared, retained, and unresolved assignments.
 - List existing and proposed module cycles.
 - Identify files with multiple feature candidates.
 - Separate observed facts from inferred ownership.

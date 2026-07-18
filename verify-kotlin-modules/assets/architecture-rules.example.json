@@ -4,6 +4,8 @@
   "core_root": "core",
   "utility_root": "util",
   "required_feature_layers": ["domain", "data", "navigation", "ui"],
+  "required_feature_layers_by_feature": {},
+  "required_test_modules": [],
   "check_settings_registration": true,
   "test_support_names": ["test", "test-support", "fixtures"],
   "module_roles": {
@@ -23,6 +25,28 @@
   "cross_feature": {
     "severity": "warning",
     "allowed_target_roles": ["domain", "navigation"]
+  },
+  "direct_project_imports": {
+    "severity": null
+  },
+  "conventions": {
+    "included_builds": ["build-logic"],
+    "validate_included_build_plugins": true,
+    "required_registered_plugin_ids": [
+      "com.example.convention.feature.domain",
+      "com.example.convention.feature.data",
+      "com.example.convention.feature.navigation",
+      "com.example.convention.feature.ui",
+      "com.example.convention.test.support"
+    ],
+    "required_plugins_by_role": {
+      "domain": {"any_of": ["example.feature.domain", "com.example.convention.feature.domain"], "all_of": []},
+      "data": {"any_of": ["example.feature.data", "com.example.convention.feature.data"], "all_of": []},
+      "navigation": {"any_of": ["example.feature.navigation", "com.example.convention.feature.navigation"], "all_of": []},
+      "ui": {"any_of": ["example.feature.ui", "com.example.convention.feature.ui"], "all_of": []},
+      "test-support": {"any_of": ["example.test.support", "com.example.convention.test.support"], "all_of": []}
+    },
+    "forbidden_plugins_by_role": {}
   },
   "ignored_paths": [
     "build",

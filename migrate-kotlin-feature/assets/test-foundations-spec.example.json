@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "platform": "kmp",
+  "source_set": "commonMain",
+  "build_file_name": "build.gradle.kts",
+  "modules": [
+    {
+      "path": ":test",
+      "package": "com.example.test",
+      "plugins": ["alias(libs.plugins.example.test.support)"],
+      "dependencies": []
+    },
+    {
+      "path": ":test:core",
+      "package": "com.example.test.core",
+      "plugins": ["alias(libs.plugins.example.test.support)"],
+      "dependencies": [
+        "api(project(\":core:domain\"))",
+        "api(project(\":core:navigation\"))"
+      ]
+    }
+  ]
+}

@@ -5,7 +5,7 @@ description: Orchestrate an incremental modularization of an existing Kotlin/Gra
 
 # Modularize Kotlin Codebase
 
-Treat modularization as a behavior-preserving migration, not a directory reshuffle. Discover the target project’s actual frameworks and constraints, agree on boundaries, introduce reusable build conventions, migrate one vertical slice at a time, and keep the build green at every checkpoint.
+Treat modularization as a behavior-preserving migration, not a directory reshuffle. Discover the target project’s actual frameworks and constraints, agree on boundaries, introduce reusable build conventions, migrate one vertical slice at a time, and keep the build green at every checkpoint. Persist progress so another agent can resume without rediscovering completed work.
 
 ## Required sibling skills
 
@@ -41,7 +41,7 @@ Preserve these invariants unless the user explicitly changes them:
 - A test-support module contains reusable fakes, fixtures, and test builders; it is never on a production runtime path.
 - Cross-feature sharing moves only after a second real consumer appears or a stable product concept is clearly app-wide.
 
-Read [references/architecture-blueprint.md](references/architecture-blueprint.md) before designing the target graph. Read [references/migration-playbook.md](references/migration-playbook.md) before making changes. Read [references/artifact-contract.md](references/artifact-contract.md) when creating or consuming `.modularization` artifacts.
+Read [references/architecture-blueprint.md](references/architecture-blueprint.md) before designing the target graph. Read [references/migration-playbook.md](references/migration-playbook.md) before making changes. Read [references/chunk-tracking.md](references/chunk-tracking.md) before the first repository edit. Read [references/artifact-contract.md](references/artifact-contract.md) when creating or consuming `.modularization` artifacts.
 
 ## Phase 0: Establish a baseline
 
@@ -71,6 +71,10 @@ Review feature names against product language, not just package names. Prefer co
 
 Do not proceed with ambiguous boundaries that would materially change the target design. Ask for user direction only after presenting the evidence and a recommended choice.
 
+Do not begin structural edits until every production/test source is assigned to a feature, core/utility/app-shell target, intentionally retained, generated/excluded, or listed in the unresolved queue with an owner.
+
+After the plan is reviewed, initialize `.modularization/work-state.json` and `.modularization/worklog.md` with `scripts/track_modularization.py init --plan ... --config ...`. Keep these files in the target repository. Review the generated dependency graph and add/split chunks before the first structural edit.
+
 ## Phase 2: Design convention plugins
 
 Invoke `$design-gradle-conventions` after the audit is stable and before generating many modules.
@@ -87,7 +91,7 @@ Create a thin base plugin per platform family, then compose optional capabilitie
 
 Keep app-only signing, secrets, distribution, environment files, and release automation separate from library conventions. Avoid a boolean-heavy universal plugin if independent capability plugins make module intent clearer. If the project already has a mature convention system, extend it rather than creating a parallel build.
 
-Compile the build logic and migrate one existing low-risk module to prove it before scaffolding the full target graph.
+Compile the build logic and migrate one existing low-risk module to prove it before scaffolding the full target graph. Record the representative module, its before/after plugins, targets/source sets, dependencies, generated outputs, resources, and test tasks. Convention creation is not complete while new modules still copy raw platform configuration instead of applying the approved convention plugins.
 
 ## Phase 3: Prepare foundations
 
@@ -98,6 +102,8 @@ Introduce only foundations required by the first feature:
 - `core:navigation` for navigation abstractions and shared route contracts;
 - `core:ui` for the design system and presentation foundations;
 - `util:<capability>:domain` plus `real` and optional `ui` for independently reusable cross-cutting services.
+- a repository-wide test-foundation module for production-independent helpers, plus a downstream-safe core-contract fake module when multiple features need it;
+- feature/utility `test` support modules only when fakes or fixtures have multiple owning-test consumers and the dependency direction is acyclic.
 
 Do not create empty speculative modules. Do not move feature-specific code into `core` as a shortcut.
 
@@ -115,6 +121,8 @@ Invoke `$migrate-kotlin-feature` and migrate dependency-first:
 6. DI registration, app aggregation, and entry-point wiring.
 7. Old code deletion only after all references have moved and checks pass.
 
+Before each numbered batch, start its ledger chunk. After the batch, record exact command results, changed paths, decisions, risks, and adapters, then complete the chunk. Keep only one chunk `in_progress`.
+
 Use compatibility adapters when a single atomic move would be too risky. Make adapters temporary, named, and tracked in the plan.
 
 ## Phase 5: Repeat by vertical slice
@@ -127,6 +135,7 @@ After the pilot passes verification:
 4. Re-run architecture checks after every feature.
 5. Promote shared code only when evidence shows stable reuse.
 6. Keep a remaining-files queue; every monolith file must be assigned, intentionally retained, or deleted.
+7. Resume from the ledger rather than repeating completed discovery or moves. Revalidate the repository head and dirty baseline before resuming a blocked or interrupted chunk.
 
 Avoid horizontal big-bang moves such as extracting every model before any feature works end-to-end.
 
@@ -144,6 +153,34 @@ Completion requires:
 - all baseline checks pass or only documented pre-existing failures remain;
 - no compatibility adapter, duplicate implementation, or stale monolith source remains untracked;
 - architecture documentation and CI checks describe the new structure.
+- every completed work chunk has verification evidence or a specific reason no executable check exists;
+- no required convention-plugin or testing-foundation chunk was skipped merely because hand-written Gradle configuration compiled;
+- `.modularization/work-state.json` validates and has no open temporary adapter at final completion.
+
+## Mandatory chunk protocol
+
+Use `scripts/track_modularization.py`; do not maintain progress only in conversation or an ad hoc checklist.
+
+```bash
+python3 scripts/track_modularization.py --root /path/to/repo init \
+  --plan /path/to/repo/.modularization/plan.json \
+  --config /path/to/repo/.modularization/config.json
+
+python3 scripts/track_modularization.py --root /path/to/repo start --chunk conventions
+
+# Run the reviewed build command separately, then record its exact result.
+python3 scripts/track_modularization.py --root /path/to/repo record-check \
+  --chunk conventions \
+  --argv-json '["./gradlew","-p","build-logic","build"]' \
+  --exit-code 0 \
+  --summary "Included build compiled successfully."
+
+python3 scripts/track_modularization.py --root /path/to/repo complete \
+  --chunk conventions \
+  --note "Created the approved base/capability plugins and converted the representative module."
+```
+
+The tracker records results; it intentionally does not execute shell commands or commit changes. Stage or commit chunks only when the user authorizes Git writes. Never mark a chunk complete with an introduced required-check failure.
 
 ## Stop conditions
 

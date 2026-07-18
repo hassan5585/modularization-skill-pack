@@ -31,6 +31,14 @@
   ],
   "verification": {
     "baseline_commands": ["./gradlew check"],
-    "app_compile_commands": ["./gradlew :app:assembleDebug"]
+    "build_logic_commands": ["./gradlew -p build-logic build"],
+    "app_compile_commands": ["./gradlew :app:assembleDebug"],
+    "architecture_commands": ["python3 .agents/skills/verify-kotlin-modules/scripts/check_architecture.py --root . --rules .modularization/architecture-rules.json"]
+  },
+  "tracking": {
+    "state": ".modularization/work-state.json",
+    "markdown": ".modularization/worklog.md",
+    "one_in_progress_chunk": true,
+    "record_exact_command_results": true
   }
 }

@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--backup-directory", help="Required repository-relative backup directory when --force overwrites files")
     return parser.parse_args()
 
 
@@ -41,6 +42,9 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"missing required spec field: {key}")
     if not PACKAGE_RE.match(spec["package"]):
         raise ValueError(f"invalid Kotlin package: {spec['package']}")
+    directory = Path(spec["directory"])
+    if directory.is_absolute() or ".." in directory.parts:
+        raise ValueError("directory must be a repository-relative path without '..'")
     if not isinstance(spec["plugins"], list) or not spec["plugins"]:
         raise ValueError("plugins must be a non-empty list")
     seen_ids: set[str] = set()
@@ -61,6 +65,13 @@ def load_spec(path: Path) -> dict:
         seen_classes.add(plugin["class_name"])
         if not all(isinstance(line, str) for line in plugin.get("body", [])):
             raise ValueError(f"plugin body must be a list of strings: {plugin['id']}")
+        if not all(isinstance(line, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*|\.\*)*", line) for line in plugin.get("imports", [])):
+            raise ValueError(f"plugin imports must be fully-qualified Kotlin imports: {plugin['id']}")
+    for module in spec.get("representative_modules", []):
+        if not isinstance(module, dict) or not re.fullmatch(r":[A-Za-z0-9_:-]+", module.get("path", "")):
+            raise ValueError(f"invalid representative module: {module}")
+        if not all(isinstance(value, str) and value for value in module.get("commands", [])):
+            raise ValueError(f"representative module commands must be non-empty strings: {module}")
     return spec
 
 
@@ -134,11 +145,12 @@ def plugin_text(spec: dict, plugin: dict) -> str:
     lines = apply_lines + body_lines
     if not lines:
         lines = ["        // Intentionally empty until target-specific configuration is added."]
+    extra_imports = "".join(f"import {value}\n" for value in sorted(set(plugin.get("imports", []))))
     return f'''package {spec['package']}
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-
+{extra_imports}
 class {plugin['class_name']} : Plugin<Project> {{
     override fun apply(target: Project) = with(target) {{
 {chr(10).join(lines)}
@@ -179,11 +191,34 @@ def main() -> int:
         print(f"  - {path.relative_to(root)}{marker}")
     print("\nAdd this inside the root settings.gradle(.kts) pluginManagement block after review:")
     print(f'  includeBuild("{spec["directory"]}")')
+    if spec.get("representative_modules"):
+        print("\nRepresentative-module proof required before mass conversion:")
+        for module in spec["representative_modules"]:
+            print(f"  - {module['path']}: apply {', '.join(module.get('plugins', [])) or 'the approved conventions'}")
+            for command in module.get("commands", []):
+                print(f"    - {command}")
     if not options.apply:
         return 0
     if existing and not options.force:
         print("error: refusing to replace existing files; review them or pass --force", file=sys.stderr)
         return 3
+    if existing and options.force and not options.backup_directory:
+        print("error: --force requires --backup-directory so overwritten files remain recoverable", file=sys.stderr)
+        return 3
+    if existing:
+        try:
+            backup_root = safe_target(root, options.backup_directory)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if backup_root.exists():
+            print(f"error: backup directory already exists: {backup_root.relative_to(root)}", file=sys.stderr)
+            return 3
+        for path in existing:
+            backup = backup_root / path.relative_to(root)
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            backup.write_bytes(path.read_bytes())
+        print(f"Backed up {len(existing)} file(s) under {backup_root.relative_to(root)}")
     for path, content in write_plans:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")

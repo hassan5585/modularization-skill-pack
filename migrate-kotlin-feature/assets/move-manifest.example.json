@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "batch_id": "orders-domain-01",
+  "feature": "orders",
+  "layer": "domain",
   "moves": [
     {
       "from": "app/src/main/kotlin/com/example/legacy/orders/Order.kt",

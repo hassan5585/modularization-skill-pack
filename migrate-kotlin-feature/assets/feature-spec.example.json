@@ -12,7 +12,8 @@
     "domain": {
       "enabled": true,
       "plugins": ["alias(libs.plugins.example.feature.domain)"],
-      "dependencies": ["implementation(project(\":core:domain\"))"]
+      "dependencies": ["implementation(project(\":core:domain\"))"],
+      "test_dependencies": []
     },
     "data": {
       "enabled": true,
@@ -20,6 +21,9 @@
       "dependencies": [
         "implementation(project(\":feature:orders:domain\"))",
         "implementation(project(\":core:data\"))"
+      ],
+      "test_dependencies": [
+        "implementation(project(\":feature:orders:test\"))"
       ]
     },
     "navigation": {
@@ -28,7 +32,8 @@
       "dependencies": [
         "api(project(\":core:navigation\"))",
         "implementation(project(\":feature:orders:domain\"))"
-      ]
+      ],
+      "test_dependencies": []
     },
     "ui": {
       "enabled": true,
@@ -37,6 +42,9 @@
         "implementation(project(\":feature:orders:domain\"))",
         "implementation(project(\":feature:orders:navigation\"))",
         "implementation(project(\":core:ui\"))"
+      ],
+      "test_dependencies": [
+        "implementation(project(\":feature:orders:test\"))"
       ]
     },
     "test": {
@@ -44,7 +52,8 @@
       "plugins": ["alias(libs.plugins.example.test.support)"],
       "dependencies": [
         "api(project(\":test:core\"))"
-      ]
+      ],
+      "test_dependencies": []
     }
   },
   "aggregation": {

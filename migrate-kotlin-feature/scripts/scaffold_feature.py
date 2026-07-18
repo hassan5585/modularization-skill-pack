@@ -44,14 +44,33 @@ def load_spec(path: Path) -> dict:
         raise ValueError(f"invalid package: {spec['package']}")
     if spec["platform"] not in {"kmp", "android", "jvm"}:
         raise ValueError("platform must be kmp, android, or jvm")
+    if spec.get("build_file_name", "build.gradle.kts") not in {"build.gradle.kts", "build.gradle"}:
+        raise ValueError("build_file_name must be build.gradle.kts or build.gradle")
+    for key in ("source_set", "test_source_set"):
+        value = spec.get(key)
+        if value is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", value):
+            raise ValueError(f"{key} must be a simple Gradle source-set name")
     unknown = set(spec["layers"]) - set(KNOWN_LAYERS)
     if unknown:
         raise ValueError(f"unknown layers: {sorted(unknown)}")
     for layer, config in spec["layers"].items():
-        for field in ("plugins", "dependencies"):
+        if not isinstance(config, dict):
+            raise ValueError(f"{layer} must be an object")
+        for field in ("plugins", "dependencies", "test_dependencies"):
             values = config.get(field, [])
-            if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
-                raise ValueError(f"{layer}.{field} must be a list of Gradle expressions")
+            if not isinstance(values, list) or not all(isinstance(item, str) and item.strip() and "\n" not in item and "\r" not in item for item in values):
+                raise ValueError(f"{layer}.{field} must be a list of non-empty single-line Gradle expressions")
+        if layer != "test" and any(re.search(r"project\([^\n]*:test[\"']?\s*\)", value, re.IGNORECASE) for value in config.get("dependencies", [])):
+            raise ValueError(f"{layer}.dependencies must not put test-support on a production source set; use test_dependencies")
+    aggregation = spec.get("aggregation", {})
+    if not isinstance(aggregation, dict):
+        raise ValueError("aggregation must be an object")
+    for field in ("plugins", "dependencies"):
+        values = aggregation.get(field, [])
+        if not isinstance(values, list) or not all(isinstance(item, str) and item.strip() and "\n" not in item and "\r" not in item for item in values):
+            raise ValueError(f"aggregation.{field} must be a list of non-empty single-line Gradle expressions")
+    if any(re.search(r"project\([^\n]*:test[\"']?\s*\)", value, re.IGNORECASE) for value in aggregation.get("dependencies", [])):
+        raise ValueError("aggregation.dependencies must not include test-support modules")
     return spec
 
 
@@ -68,26 +87,40 @@ def plugins_block(plugins: list[str]) -> str:
     return "plugins {\n" + "\n".join(f"    {line}" for line in plugins) + "\n}\n"
 
 
-def dependencies_block(platform: str, source_set: str, dependencies: list[str]) -> str:
-    if not dependencies:
+def dependencies_block(platform: str, source_set: str, test_source_set: str, dependencies: list[str], test_dependencies: list[str]) -> str:
+    if not dependencies and not test_dependencies:
         return ""
-    body = "\n".join(f"            {line}" for line in dependencies)
     if platform == "kmp":
-        return f'''\nkotlin {{
-    sourceSets.{source_set}.dependencies {{
+        sections = []
+        if dependencies:
+            body = "\n".join(f"            {line}" for line in dependencies)
+            sections.append(f'''    sourceSets.{source_set}.dependencies {{
 {body}
-    }}
+    }}''')
+        if test_dependencies:
+            test_body = "\n".join(f"            {line}" for line in test_dependencies)
+            sections.append(f'''    sourceSets.{test_source_set}.dependencies {{
+{test_body}
+    }}''')
+        return f'''\nkotlin {{
+{chr(10).join(sections)}
 }}
 '''
-    flat = "\n".join(f"    {line}" for line in dependencies)
+    flat = "\n".join(f"    {line}" for line in dependencies + test_dependencies)
     return f'''\ndependencies {{
 {flat}
 }}
 '''
 
 
-def build_text(platform: str, source_set: str, config: dict) -> str:
-    return plugins_block(config.get("plugins", [])) + dependencies_block(platform, source_set, config.get("dependencies", []))
+def build_text(platform: str, source_set: str, test_source_set: str, config: dict) -> str:
+    return plugins_block(config.get("plugins", [])) + dependencies_block(
+        platform,
+        source_set,
+        test_source_set,
+        config.get("dependencies", []),
+        config.get("test_dependencies", []),
+    )
 
 
 def source_roots(spec: dict, layer: str, layer_dir: Path) -> list[Path]:
@@ -112,10 +145,12 @@ def create_plan(root: Path, spec: dict) -> tuple[list[tuple[Path, str]], list[Pa
     files: list[tuple[Path, str]] = []
     directories: list[Path] = []
     module_prefix = ":" + ":".join((Path(spec["base_directory"]) / spec["feature"]).parts)
+    main_source_set = spec.get("source_set") or ("commonMain" if spec["platform"] == "kmp" else "main")
+    test_source_set = spec.get("test_source_set") or ("commonTest" if spec["platform"] == "kmp" else "test")
 
     if spec.get("aggregation_module", True):
         aggregation = spec.get("aggregation", {"plugins": [], "dependencies": []})
-        files.append((feature_dir / build_name, build_text(spec["platform"], spec.get("source_set", "commonMain"), aggregation)))
+        files.append((feature_dir / build_name, build_text(spec["platform"], main_source_set, test_source_set, aggregation)))
         directories.extend(source_roots(spec, "aggregation", feature_dir))
 
     modules = [module_prefix] if spec.get("aggregation_module", True) else []
@@ -124,8 +159,7 @@ def create_plan(root: Path, spec: dict) -> tuple[list[tuple[Path, str]], list[Pa
         if not config.get("enabled", False):
             continue
         layer_dir = feature_dir / layer
-        source_set = spec.get("source_set") or ("commonMain" if spec["platform"] == "kmp" else "main")
-        files.append((layer_dir / build_name, build_text(spec["platform"], source_set, config)))
+        files.append((layer_dir / build_name, build_text(spec["platform"], main_source_set, test_source_set, config)))
         directories.extend(source_roots(spec, layer, layer_dir))
         modules.append(f"{module_prefix}:{layer}")
     return files, directories, modules

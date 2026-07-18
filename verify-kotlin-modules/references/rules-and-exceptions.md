@@ -22,6 +22,16 @@ Rules operate on:
 
 Static parsing is intentionally conservative. It cannot fully interpret arbitrary Gradle Kotlin code, generated source dependencies, reflection, or runtime registration.
 
+Configure `conventions.included_builds`, `conventions.required_registered_plugin_ids`, and `conventions.required_plugins_by_role` after convention design is approved. With `validate_included_build_plugins` enabled, the checker confirms that included-build subprojects are registered, every static plugin registration has an implementation class whose source exists, ids are unique, and the required ids are registered. This turns “create convention plugins” into an enforceable build-logic and consumer-module rule. Use `forbidden_plugins_by_role` only for raw plugins fully owned by a convention.
+
+For `alias(libs.plugins.example.feature.domain)`, configure the token `example.feature.domain`; for `id("com.example.feature.domain")`, configure the full plugin id. Use the exact token shown in the Gradle audit because static verification does not resolve version-catalog aliases to ids.
+
+Configure `required_test_modules` for approved shared foundations. Feature-specific test support remains optional unless the target plan explicitly requires it.
+
+Use `required_feature_layers_by_feature` for deliberately partial feature shapes. Exact feature entries override `required_feature_layers`; `"*"` is the mapping fallback. For example, `{"profile": ["domain", "ui"], "payments": ["domain", "data"]}` verifies the approved architecture without manufacturing empty layers.
+
+`direct_project_imports` is optional. Enable it only when the repository forbids imports obtained through another module’s public `api` dependency; otherwise leave its severity null.
+
 ## 2. Default layer direction
 
 Default hard constraints:

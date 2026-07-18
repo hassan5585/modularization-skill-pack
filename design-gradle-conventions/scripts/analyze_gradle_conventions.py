@@ -13,16 +13,22 @@ from pathlib import Path
 
 
 SCHEMA_VERSION = 1
-EXCLUDED = {".git", ".gradle", ".idea", ".kotlin", "build", "out", "node_modules", "vendor"}
+EXCLUDED = {".git", ".gradle", ".idea", ".kotlin", "build", "out", "node_modules", "vendor", "Pods", "DerivedData", ".konan", ".swiftpm-locks", ".build", "swiftPMCheckout", "Carthage", "xcuserdata", ".modularization"}
 PLUGIN_RES = [
     re.compile(r"alias\(\s*libs\.plugins\.([A-Za-z0-9_.-]+)\s*\)"),
     re.compile(r"id\(\s*[\"']([^\"']+)[\"']\s*\)"),
+    re.compile(r"\bid\s+[\"']([^\"']+)[\"']"),
+    re.compile(r"apply\s+plugin\s*:\s*[\"']([^\"']+)[\"']"),
     re.compile(r"kotlin\(\s*[\"']([^\"']+)[\"']\s*\)"),
 ]
 DEPENDENCY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s*\(\s*(.+?)\s*\)\s*$")
+DEPENDENCY_GROOVY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s+([^={}].+?)\s*$")
 DEPENDENCY_SUFFIXES = ("implementation", "api", "compileonly", "runtimeonly", "processor", "kapt", "ksp")
-PROJECT_RE = re.compile(r"project\(\s*[\"'](:[^\"']+)[\"']\s*\)")
+PROJECT_RE = re.compile(r"project\(\s*(?:path\s*[:=]\s*)?[\"'](:[^\"']+)[\"']\s*\)")
+TYPE_SAFE_PROJECT_RE = re.compile(r"\bprojects\.([A-Za-z0-9_.]+)")
 ASSIGNMENT_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_.\[\]\"']*)\s*(?:=|\+=)\s*(.+?)\s*$")
+INCLUDE_BUILD_RE = re.compile(r"includeBuild\s*(?:\(\s*)?[\"']([^\"']+)[\"']")
+REGISTERED_PLUGIN_RE = re.compile(r"\bid\s*=\s*[\"']([^\"']+)[\"']")
 
 
 def args() -> argparse.Namespace:
@@ -40,10 +46,28 @@ def excluded(path: Path, root: Path, extra: set[str]) -> bool:
     return any(part in EXCLUDED or part in extra for part in rel.parts) or any(rel_text == x or rel_text.startswith(x.rstrip("/") + "/") for x in extra)
 
 
+def included_build_roots(root: Path) -> set[Path]:
+    settings = next((root / name for name in ("settings.gradle.kts", "settings.gradle") if (root / name).is_file()), None)
+    if not settings:
+        return set()
+    text = settings.read_text(encoding="utf-8", errors="replace")
+    result = set()
+    for relative in INCLUDE_BUILD_RE.findall(text):
+        candidate = (root / relative).resolve()
+        if candidate != root and root in candidate.parents:
+            result.add(candidate)
+    return result
+
+
 def build_files(root: Path, extra: set[str]) -> list[Path]:
     result = []
+    included_builds = included_build_roots(root)
     for current, dirs, files in os.walk(root):
         base = Path(current)
+        if base != root and any((base / name).is_file() for name in ("settings.gradle", "settings.gradle.kts")):
+            if base.resolve() not in included_builds:
+                dirs[:] = []
+                continue
         dirs[:] = [d for d in dirs if not excluded(base / d, root, extra)]
         for name in files:
             if name in {"build.gradle", "build.gradle.kts"}:
@@ -79,11 +103,26 @@ def normalize_dependency(expr: str) -> str:
     project = PROJECT_RE.search(expr)
     if project:
         return f"project({project.group(1)})"
+    type_safe = TYPE_SAFE_PROJECT_RE.search(expr)
+    if type_safe:
+        return "project(:" + type_safe.group(1).replace(".", ":") + ")"
     alias = re.search(r"libs\.([A-Za-z0-9_.-]+)", expr)
     if alias:
         return f"libs.{alias.group(1)}"
     quoted = re.search(r"[\"']([^\"']+)[\"']", expr)
     return quoted.group(1) if quoted else expr[:160]
+
+
+def applied_plugins(text: str) -> list[str]:
+    plugins: set[str] = set()
+    for pattern in PLUGIN_RES:
+        for match in pattern.finditer(text):
+            line_end = text.find("\n", match.end())
+            trailer = text[match.end():line_end if line_end >= 0 else len(text)].lower()
+            if re.search(r"\bapply\s+false\b", trailer):
+                continue
+            plugins.add(match.group(1))
+    return sorted(plugins)
 
 
 def significant_assignments(text: str) -> list[str]:
@@ -112,12 +151,14 @@ def analyze(root: Path, excludes: set[str]) -> dict:
         except UnicodeDecodeError:
             text = file.read_text(encoding="utf-8", errors="replace")
             warnings.append({"path": file.relative_to(root).as_posix(), "warning": "invalid UTF-8 replaced"})
-        plugins = sorted({m.group(1) for regex in PLUGIN_RES for m in regex.finditer(text)})
-        dependencies = [
-            {"configuration": m.group(1), "dependency": normalize_dependency(m.group(2))}
-            for m in DEPENDENCY_RE.finditer(text)
-            if m.group(1).lower().endswith(DEPENDENCY_SUFFIXES)
-        ]
+        plugins = applied_plugins(text)
+        dependency_values = {
+            (match.group(1), normalize_dependency(match.group(2)))
+            for pattern in (DEPENDENCY_RE, DEPENDENCY_GROOVY_RE)
+            for match in pattern.finditer(text)
+            if match.group(1).lower().endswith(DEPENDENCY_SUFFIXES)
+        }
+        dependencies = [{"configuration": configuration, "dependency": dependency} for configuration, dependency in sorted(dependency_values)]
         modules.append({
             "path": ":" + ":".join(file.parent.relative_to(root).parts) if file.parent != root else ":",
             "directory": file.parent.relative_to(root).as_posix() or ".",
@@ -155,9 +196,17 @@ def analyze(root: Path, excludes: set[str]) -> dict:
 
     global_plugins = collections.Counter(p for module in modules for p in module["plugins"])
     global_dependencies = collections.Counter((d["configuration"], d["dependency"]) for module in modules for d in module["dependencies"])
+    registered_plugins: set[str] = set()
+    for module in modules:
+        if module["role"] == "build-logic":
+            text = (root / module["build_file"]).read_text(encoding="utf-8", errors="replace")
+            registered_plugins.update(REGISTERED_PLUGIN_RE.findall(text))
     return {
         "schema_version": SCHEMA_VERSION,
-        "root": str(root),
+        "root": ".",
+        "project_name": root.name,
+        "included_builds": sorted(path.relative_to(root).as_posix() for path in included_build_roots(root)),
+        "registered_convention_plugins": sorted(registered_plugins),
         "module_count": len(modules),
         "modules": modules,
         "role_patterns": role_patterns,
@@ -170,7 +219,13 @@ def analyze(root: Path, excludes: set[str]) -> dict:
 
 
 def markdown(data: dict) -> str:
-    lines = ["# Gradle convention audit", "", f"Analyzed {data['module_count']} build files.", "", "## Patterns by module role", ""]
+    lines = [
+        "# Gradle convention audit", "",
+        f"Analyzed {data['module_count']} build files.",
+        f"Included builds: `{', '.join(data['included_builds']) or 'none'}`",
+        f"Registered convention plugin ids found: `{', '.join(data['registered_convention_plugins']) or 'none detected'}`",
+        "", "## Patterns by module role", "",
+    ]
     for role, pattern in data["role_patterns"].items():
         lines += [f"### {role} ({pattern['module_count']})", "", "Repeated plugins:", ""]
         repeated = [p for p in pattern["plugins"] if p["count"] >= 2 or p["ratio"] == 1.0]

@@ -15,17 +15,79 @@
       "id": "com.example.convention.kotlin.library",
       "class_name": "KotlinLibraryConventionPlugin",
       "applies": ["org.jetbrains.kotlin.jvm"],
+      "imports": [],
       "body": [
         "// Configure the target repository's verified toolchain and compiler defaults here."
+      ]
+    },
+    {
+      "registration_name": "unitTest",
+      "id": "com.example.convention.unit.test",
+      "class_name": "UnitTestConventionPlugin",
+      "applies": [],
+      "imports": [],
+      "body": [
+        "// Configure only the target repository's verified owning-module test source sets, libraries, tasks, and check lifecycle."
       ]
     },
     {
       "registration_name": "featureDomain",
       "id": "com.example.convention.feature.domain",
       "class_name": "FeatureDomainConventionPlugin",
-      "applies": ["com.example.convention.kotlin.library"],
+      "applies": ["com.example.convention.kotlin.library", "com.example.convention.unit.test"],
+      "imports": [],
       "body": [
         "// Add only domain-safe dependencies and test defaults detected in the target repository."
+      ]
+    },
+    {
+      "registration_name": "featureData",
+      "id": "com.example.convention.feature.data",
+      "class_name": "FeatureDataConventionPlugin",
+      "applies": ["com.example.convention.kotlin.library", "com.example.convention.unit.test"],
+      "imports": [],
+      "body": [
+        "// Apply only target-audited serialization, network, persistence, and code-generation capabilities."
+      ]
+    },
+    {
+      "registration_name": "featureNavigation",
+      "id": "com.example.convention.feature.navigation",
+      "class_name": "FeatureNavigationConventionPlugin",
+      "applies": ["com.example.convention.kotlin.library", "com.example.convention.unit.test"],
+      "imports": [],
+      "body": [
+        "// Add only stable route contracts, serialization, and navigation dependencies proven by the audit."
+      ]
+    },
+    {
+      "registration_name": "featureUi",
+      "id": "com.example.convention.feature.ui",
+      "class_name": "FeatureUiConventionPlugin",
+      "applies": ["com.example.convention.kotlin.library", "com.example.convention.unit.test"],
+      "imports": [],
+      "body": [
+        "// Configure only the target UI toolkit, resource pipeline, lifecycle, navigation UI, and test capabilities."
+      ]
+    },
+    {
+      "registration_name": "testSupport",
+      "id": "com.example.convention.test.support",
+      "class_name": "TestSupportConventionPlugin",
+      "applies": ["com.example.convention.kotlin.library"],
+      "imports": [],
+      "body": [
+        "// Configure reusable fake/fixture libraries without leaking them onto production classpaths."
+      ]
+    }
+  ],
+  "representative_modules": [
+    {
+      "path": ":core:domain",
+      "plugins": ["com.example.convention.feature.domain"],
+      "commands": [
+        "./gradlew :core:domain:check",
+        "./gradlew :core:domain:dependencies"
       ]
     }
   ]

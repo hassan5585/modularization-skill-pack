@@ -40,6 +40,8 @@ feature/<name>/
 
 The `test` child is reusable test support. Actual tests stay under each owning layer’s test source set.
 
+Create repository-level `:test`-style foundations only when production-independent helpers have multiple module consumers. Create a core-contract fake module only for downstream feature/utility tests; core modules must not consume a fake module that depends back on core. Use the test-foundation scaffold spec as a reviewed starting point.
+
 The feature root may be omitted when the app deliberately depends on layers directly. If present, it aggregates production layers and may own feature-level DI/registration. It never depends on test support.
 
 ## 3. Dependency-first batches

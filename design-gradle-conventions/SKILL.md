@@ -65,7 +65,7 @@ Apply only after reviewing paths and plugin IDs:
 python3 scripts/scaffold_build_logic.py --root /path/to/repo --spec /path/to/spec.json --apply
 ```
 
-The scaffold is intentionally thin. Complete typed Gradle configuration by adapting verified snippets from the target build. Supply compile-time plugin artifacts in the spec when implementation classes reference AGP, Kotlin, Compose, KSP, Room, or other plugin types.
+The scaffold is intentionally thin. Complete typed Gradle configuration by adapting verified snippets from the target build. Supply compile-time plugin artifacts and Kotlin imports in the spec when implementation classes reference AGP, Kotlin, Compose, KSP, Room, or other plugin types. List at least one representative module and its exact proof commands in the spec.
 
 ## Integrate safely
 
@@ -77,6 +77,8 @@ The scaffold is intentionally thin. Complete typed Gradle configuration by adapt
 6. Convert the pilot feature modules.
 7. Remove duplicated configuration only after the convention proves equivalent.
 
+Do not call convention design complete after merely generating plugin classes. The included build must be registered, compile, and be applied by the representative module. Encode approved per-role plugin IDs in the architecture rules so later raw-module configuration or missing convention use fails verification.
+
 ## Rules by layer
 
 - **Domain:** apply only language, serialization if domain contracts require it, DI annotations/compiler only if unavoidable, and unit-test foundations. Never add UI, database, network client, Android framework, or app plugins by default.
@@ -84,6 +86,7 @@ The scaffold is intentionally thin. Complete typed Gradle configuration by adapt
 - **Navigation:** add only route serialization and the detected navigation contracts/runtime required for declarations.
 - **UI:** add the detected UI toolkit, resource pipeline, lifecycle/presentation, navigation UI, previews, and UI tests when used.
 - **Test support:** add test libraries and downstream-safe contracts; never make production aggregators depend on it.
+- **Owning-module tests:** configure the project’s real unit-test source sets/tasks and portable base libraries, then attach required tests to the normal verification lifecycle. Keep this distinct from the test-support library convention.
 - **Aggregation root:** expose or implement child modules and register DI/entry points; avoid owning feature behavior.
 
 ## Validation

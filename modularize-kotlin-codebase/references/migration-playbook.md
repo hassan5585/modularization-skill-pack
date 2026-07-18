@@ -39,9 +39,13 @@ Store durable migration artifacts under `.modularization/` when repository write
   feature-<name>.json
   moves-<name>-<batch>.json
   findings.json
+  work-state.json
+  worklog.md
 ```
 
 JSON is the machine contract; Markdown is the review surface. Keep them generated from the same inputs.
+
+Initialize the work state from the reviewed plan. Start, verify, and complete one chunk at a time. Record temporary bridges and removal conditions when they are introduced, not during final cleanup.
 
 ## 3. Pilot selection
 
@@ -68,6 +72,8 @@ Keep commits or logical batches compilable:
 7. Rewire DI and app aggregation.
 8. Remove old code and compatibility adapters.
 9. Run broad verification.
+
+Map these batches into the repository ledger. A conversation checklist is not a durable checkpoint.
 
 If an intermediate build cannot compile, make the batch smaller or use a temporary adapter.
 

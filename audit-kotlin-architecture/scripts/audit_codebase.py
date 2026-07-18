@@ -20,7 +20,8 @@ from typing import Iterable
 SCHEMA_VERSION = 1
 DEFAULT_EXCLUDES = {
     ".git", ".gradle", ".idea", ".kotlin", "build", "out", "node_modules",
-    "Pods", "DerivedData", ".konan", "vendor",
+    "Pods", "DerivedData", ".konan", "vendor", ".swiftpm-locks", ".build",
+    "swiftPMCheckout", "Carthage", "xcuserdata", ".modularization",
 }
 TECHNICAL_SEGMENTS = {
     "app", "application", "common", "shared", "core", "base", "feature", "features",
@@ -32,13 +33,59 @@ PACKAGE_RE = re.compile(r"(?m)^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)")
 IMPORT_RE = re.compile(r"(?m)^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\.\*)?)")
 PROJECT_DEP_RES = [
     re.compile(r"project\(\s*[\"'](:[^\"']+)[\"']\s*\)"),
-    re.compile(r"project\(\s*path\s*=\s*[\"'](:[^\"']+)[\"']"),
+    re.compile(r"project\(\s*path\s*[:=]\s*[\"'](:[^\"']+)[\"']"),
+    re.compile(r"\bprojects\.([A-Za-z0-9_.]+)"),
 ]
 PLUGIN_PATTERNS = [
     re.compile(r"alias\(\s*libs\.plugins\.([A-Za-z0-9_.-]+)\s*\)"),
     re.compile(r"id\(\s*[\"']([^\"']+)[\"']\s*\)"),
+    re.compile(r"\bid\s+[\"']([^\"']+)[\"']"),
+    re.compile(r"apply\s+plugin\s*:\s*[\"']([^\"']+)[\"']"),
     re.compile(r"kotlin\(\s*[\"']([^\"']+)[\"']\s*\)"),
 ]
+DEPENDENCY_CALL_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s*\(\s*(.+?)\s*\)\s*$")
+DEPENDENCY_GROOVY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s+([^={}].+?)\s*$")
+DEPENDENCY_SUFFIXES = ("implementation", "api", "compileonly", "runtimeonly", "processor", "kapt", "ksp")
+INCLUDE_BUILD_RE = re.compile(r"includeBuild\s*(?:\(\s*)?[\"']([^\"']+)[\"']")
+CAPABILITY_IMPORT_PREFIXES = {
+    "ui": ("androidx.compose", "org.jetbrains.compose", "android.view", "android.widget", "javafx"),
+    "navigation": ("androidx.navigation", "com.arkivanov.decompose", "cafe.adriel.voyager"),
+    "dependency_injection": ("dagger", "javax.inject", "jakarta.inject", "org.koin", "dev.zacsweers.metro"),
+    "networking": ("io.ktor", "retrofit2", "okhttp3", "com.apollographql"),
+    "serialization": ("kotlinx.serialization", "com.squareup.moshi", "com.google.gson"),
+    "persistence": ("androidx.room", "app.cash.sqldelight", "io.realm", "androidx.datastore"),
+    "async": ("kotlinx.coroutines", "io.reactivex", "reactor.core"),
+    "testing": ("kotlin.test", "org.junit", "app.cash.turbine", "io.mockk", "org.mockito"),
+}
+CAPABILITY_DEPENDENCY_TOKENS = {
+    "ui": ("compose", "appcompat", "androidx.core", "material"),
+    "navigation": ("navigation", "decompose", "voyager"),
+    "dependency_injection": ("dagger", "hilt", "koin", "metro", "inject"),
+    "networking": ("ktor", "retrofit", "okhttp", "apollo"),
+    "serialization": ("serialization", "moshi", "gson"),
+    "persistence": ("room", "sqldelight", "realm", "datastore"),
+    "async": ("coroutines", "rxjava", "reactor"),
+    "testing": ("junit", "kotlin-test", "turbine", "mock", "test"),
+}
+ARTIFACT_SUFFIX_KINDS = {
+    ".sq": "database-schema",
+    ".sqm": "database-migration",
+    ".graphql": "network-schema",
+    ".graphqls": "network-schema",
+    ".proto": "serialization-schema",
+    ".def": "native-interop",
+    ".plist": "platform-resource",
+    ".entitlements": "platform-resource",
+    ".pro": "shrinker-rules",
+    ".rules": "shrinker-rules",
+    ".swift": "platform-source",
+    ".m": "platform-source",
+    ".mm": "platform-source",
+    ".h": "native-header",
+    ".storyboard": "platform-resource",
+    ".xib": "platform-resource",
+    ".strings": "platform-resource",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,9 +110,27 @@ def is_excluded(path: Path, root: Path, excludes: set[str]) -> bool:
     return any(rel_posix == item or rel_posix.startswith(item.rstrip("/") + "/") for item in excludes)
 
 
+def included_build_roots(root: Path) -> set[Path]:
+    settings = next((root / name for name in ("settings.gradle.kts", "settings.gradle") if (root / name).is_file()), None)
+    if not settings:
+        return set()
+    text, _ = read_text(settings)
+    result = set()
+    for relative in INCLUDE_BUILD_RE.findall(text):
+        candidate = (root / relative).resolve()
+        if candidate != root and root in candidate.parents:
+            result.add(candidate)
+    return result
+
+
 def walk_files(root: Path, excludes: set[str]) -> Iterable[Path]:
+    included_builds = included_build_roots(root)
     for current, dirs, files in os.walk(root):
         current_path = Path(current)
+        if current_path != root and any((current_path / name).is_file() for name in ("settings.gradle", "settings.gradle.kts")):
+            if current_path.resolve() not in included_builds:
+                dirs[:] = []
+                continue
         dirs[:] = [d for d in dirs if not is_excluded(current_path / d, root, excludes)]
         for name in files:
             path = current_path / name
@@ -83,6 +148,71 @@ def read_text(path: Path) -> tuple[str, str | None]:
             return "", str(exc)
     except OSError as exc:
         return "", str(exc)
+
+
+def project_dependencies(text: str) -> tuple[list[str], list[str]]:
+    matches = sorted(
+        ((match.start(), match.group(1)) for regex in PROJECT_DEP_RES for match in regex.finditer(text)),
+        key=lambda item: item[0],
+    )
+    production: set[str] = set()
+    tests: set[str] = set()
+    for position, dependency in matches:
+        if not dependency.startswith(":"):
+            dependency = ":" + dependency.replace(".", ":")
+        stack: list[str] = []
+        last_boundary = 0
+        for index, char in enumerate(text[:position]):
+            if char == "{" and (index == 0 or text[index - 1] != "$"):
+                stack.append(text[last_boundary:index].strip()[-160:])
+                last_boundary = index + 1
+            elif char == "}":
+                if stack:
+                    stack.pop()
+                last_boundary = index + 1
+            elif char == "\n" and not text[last_boundary:index].strip():
+                last_boundary = index + 1
+        line_prefix = text[text.rfind("\n", 0, position) + 1:position]
+        context = " ".join(stack + [line_prefix]).lower()
+        (tests if "test" in context else production).add(dependency)
+    return sorted(production), sorted(tests)
+
+
+def plugin_ids(text: str) -> list[str]:
+    plugins: set[str] = set()
+    for pattern in PLUGIN_PATTERNS:
+        for match in pattern.finditer(text):
+            line_end = text.find("\n", match.end())
+            trailer = text[match.end():line_end if line_end >= 0 else len(text)].lower()
+            if re.search(r"\bapply\s+false\b", trailer):
+                continue
+            plugins.add(match.group(1))
+    return sorted(plugins)
+
+
+def declared_dependencies(text: str) -> list[dict]:
+    values: set[tuple[str, str]] = set()
+    for pattern in (DEPENDENCY_CALL_RE, DEPENDENCY_GROOVY_RE):
+        for match in pattern.finditer(text):
+            configuration = match.group(1)
+            if not configuration.lower().endswith(DEPENDENCY_SUFFIXES):
+                continue
+            expression = re.sub(r"\s+", " ", match.group(2).strip())
+            quoted = re.search(r"[\"']([^\"']+)[\"']", expression)
+            catalog = re.search(r"\blibs\.([A-Za-z0-9_.-]+)", expression)
+            project = next((regex.search(expression) for regex in PROJECT_DEP_RES if regex.search(expression)), None)
+            if project:
+                value = project.group(1)
+                if not value.startswith(":"):
+                    value = ":" + value.replace(".", ":")
+            elif catalog:
+                value = "libs." + catalog.group(1)
+            elif quoted:
+                value = quoted.group(1)
+            else:
+                value = expression[:200]
+            values.add((configuration, value))
+    return [{"configuration": configuration, "value": value} for configuration, value in sorted(values)]
 
 
 def module_path_for(build_file: Path, root: Path) -> str:
@@ -138,7 +268,7 @@ def classify_layer(path: Path, text: str, detect_tests: bool = True) -> tuple[st
     signals = {
         "ui": [
             "androidx.compose", "@composable", "android.view.", "android.widget.",
-            "fragment", "viewmodel", "presenter", "uistate", "swiftui",
+            "activity", "fragment", "viewmodel", "presenter", "uistate", "swiftui",
         ],
         "data": [
             "io.ktor", "retrofit", "okhttp", "androidx.room", "sqldelight", "realm",
@@ -171,14 +301,50 @@ def classify_layer(path: Path, text: str, detect_tests: bool = True) -> tuple[st
     return top, confidence, dict(scores)
 
 
-def feature_from_package(package: str | None, root_package: str | None, path: Path) -> str | None:
-    parts = [p.lower() for p in path.parts]
+def feature_from_module(module: str | None) -> str | None:
+    if not module:
+        return None
+    parts = [part.lower() for part in module.split(":") if part]
+    for marker in ("feature", "features"):
+        if marker in parts:
+            index = parts.index(marker)
+            if index + 1 < len(parts):
+                return parts[index + 1]
+    return None
+
+
+def feature_from_explicit_path(path: Path) -> str | None:
+    parts = [part.lower() for part in path.parts]
     for marker in ("feature", "features"):
         if marker in parts:
             index = parts.index(marker)
             if index + 1 < len(parts) and parts[index + 1] not in TECHNICAL_SEGMENTS:
                 return parts[index + 1]
+    return None
+
+
+def module_allows_package_feature_inference(module: str | None) -> bool:
+    if not module or module == ":":
+        return True
+    parts = [part.lower() for part in module.split(":") if part]
+    if not parts:
+        return True
+    first = parts[0]
+    last = parts[-1]
+    return first in {"app", "application", "shared", "composeapp", "androidapp"} or last.endswith("app") or last == "application"
+
+
+def feature_from_package(package: str | None, root_package: str | None, path: Path, module: str | None = None) -> str | None:
+    module_feature = feature_from_module(module)
+    if module_feature:
+        return module_feature
+    explicit_path_feature = feature_from_explicit_path(path)
+    if explicit_path_feature:
+        return explicit_path_feature
+    parts = [p.lower() for p in path.parts]
     if parts and parts[0] in {"core", "util", "utility", "plugins", "build-logic", "buildsrc", "test"}:
+        return None
+    if not module_allows_package_feature_inference(module):
         return None
     if package and root_package and (package == root_package or package.startswith(root_package + ".")):
         remainder = package[len(root_package):].lstrip(".").split(".")
@@ -193,6 +359,78 @@ def external_family(import_path: str) -> str:
     return ".".join(parts[: min(3, len(parts))])
 
 
+def source_set_for_path(path: Path) -> str | None:
+    parts = path.parts
+    if "src" in parts:
+        index = parts.index("src")
+        if index + 1 < len(parts):
+            return parts[index + 1]
+    return None
+
+
+def artifact_kind(path: Path) -> str | None:
+    lower_parts = [part.lower() for part in path.parts]
+    lower_name = path.name.lower()
+    if lower_name == "androidmanifest.xml":
+        return "android-manifest"
+    if "res" in lower_parts or "composeresources" in lower_parts:
+        return "resource"
+    if any(part.endswith(".xcassets") for part in lower_parts):
+        return "platform-resource"
+    if "schemas" in lower_parts and path.suffix.lower() == ".json":
+        return "database-schema"
+    if lower_name in {"consumer-rules.pro", "proguard-rules.pro"}:
+        return "shrinker-rules"
+    return ARTIFACT_SUFFIX_KINDS.get(path.suffix.lower())
+
+
+def detect_cycles(graph: dict[str, list[str]]) -> list[list[str]]:
+    state: dict[str, int] = {}
+    stack: list[str] = []
+    cycles: set[tuple[str, ...]] = set()
+
+    def visit(node: str) -> None:
+        state[node] = 1
+        stack.append(node)
+        for target in graph.get(node, []):
+            if target not in graph:
+                continue
+            if state.get(target, 0) == 0:
+                visit(target)
+            elif state.get(target) == 1:
+                index = stack.index(target)
+                body = stack[index:]
+                rotations = [tuple(body[i:] + body[:i]) for i in range(len(body))]
+                cycles.add(min(rotations))
+        stack.pop()
+        state[node] = 2
+
+    for node in graph:
+        if state.get(node, 0) == 0:
+            visit(node)
+    return [list(cycle) + [cycle[0]] for cycle in sorted(cycles)]
+
+
+def capability_inventory(modules: list[dict], sources: list[dict]) -> dict[str, dict]:
+    result: dict[str, dict] = {}
+    plugins = sorted({plugin for module in modules for plugin in module["plugins"]})
+    imports = sorted({imported for source in sources for imported in source["imports"]})
+    dependencies = sorted({item["value"] for module in modules for item in module.get("declared_dependencies", [])})
+    for capability, prefixes in CAPABILITY_IMPORT_PREFIXES.items():
+        matched_imports = [value for value in imports if value.startswith(prefixes)]
+        tokens = tuple(value.replace("_", "-") for value in capability.split("_"))
+        matched_plugins = [value for value in plugins if any(token in value.lower() for token in tokens)]
+        dependency_tokens = CAPABILITY_DEPENDENCY_TOKENS.get(capability, ())
+        matched_dependencies = [value for value in dependencies if any(token in value.lower() for token in dependency_tokens)]
+        if matched_imports or matched_plugins or matched_dependencies:
+            result[capability] = {
+                "plugins": matched_plugins[:30],
+                "import_families": sorted({external_family(value) for value in matched_imports})[:30],
+                "dependencies": matched_dependencies[:30],
+            }
+    return result
+
+
 def build_inventory(root: Path, excludes: set[str], root_package_override: str | None) -> dict:
     all_files = list(walk_files(root, excludes))
     build_files = sorted(p for p in all_files if p.name in {"build.gradle", "build.gradle.kts"})
@@ -204,14 +442,16 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
         text, error = read_text(build_file)
         if error:
             parse_warnings.append({"path": build_file.relative_to(root).as_posix(), "warning": error})
-        deps = sorted({match.group(1) for regex in PROJECT_DEP_RES for match in regex.finditer(text)})
-        plugins = sorted({match.group(1) for regex in PLUGIN_PATTERNS for match in regex.finditer(text)})
+        deps, test_deps = project_dependencies(text)
+        plugins = plugin_ids(text)
         modules.append({
             "path": module_dirs[build_file.parent],
             "directory": build_file.parent.relative_to(root).as_posix() or ".",
             "build_file": build_file.relative_to(root).as_posix(),
             "project_dependencies": deps,
+            "test_project_dependencies": test_deps,
             "plugins": plugins,
+            "declared_dependencies": declared_dependencies(text),
         })
 
     source_paths = sorted(p for p in all_files if p.suffix in {".kt", ".java"})
@@ -257,14 +497,52 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
         })
 
     root_package = root_package_override or infer_root_package(packages)
+    artifact_paths = sorted(path for path in all_files if artifact_kind(path.relative_to(root)))
+    artifacts: list[dict] = []
+    for path in artifact_paths:
+        relative = path.relative_to(root)
+        module = owning_module(path, root, module_dirs)
+        module_feature = feature_from_module(module)
+        path_feature = feature_from_explicit_path(relative)
+        artifacts.append({
+            "path": relative.as_posix(),
+            "module": module,
+            "kind": artifact_kind(relative),
+            "source_set": source_set_for_path(relative),
+            "feature": module_feature or path_feature,
+            "feature_confidence": "high" if module_feature or path_feature else "unknown",
+            "feature_reason": "existing feature module path" if module_feature else "explicit feature path" if path_feature else "manual ownership required",
+        })
     feature_counts: collections.Counter[str] = collections.Counter()
+    ambiguous_feature_counts: collections.Counter[str] = collections.Counter()
     layer_counts: collections.Counter[str] = collections.Counter()
     external_imports: collections.Counter[str] = collections.Counter()
     package_owner: dict[str, str] = {}
+    has_existing_feature_modules = any(feature_from_module(module["path"]) for module in modules)
     for source in raw_sources:
-        source["feature"] = feature_from_package(source["package"], root_package, Path(source["path"]))
-        if source["feature"]:
+        path = Path(source["path"])
+        module_feature = feature_from_module(source.get("module"))
+        path_feature = feature_from_explicit_path(path)
+        source["feature"] = feature_from_package(source["package"], root_package, path, source.get("module"))
+        if module_feature:
+            source["feature_confidence"] = "high"
+            source["feature_reason"] = "existing feature module path"
+        elif path_feature:
+            source["feature_confidence"] = "high"
+            source["feature_reason"] = "explicit feature path"
+        elif source["feature"] and has_existing_feature_modules:
+            source["feature_confidence"] = "low"
+            source["feature_reason"] = "package candidate outside existing feature modules"
+        elif source["feature"]:
+            source["feature_confidence"] = "medium"
+            source["feature_reason"] = "package candidate in monolithic module graph"
+        else:
+            source["feature_confidence"] = "unknown"
+            source["feature_reason"] = "no feature evidence"
+        if source["feature"] and source["feature_confidence"] != "low":
             feature_counts[source["feature"]] += 1
+        elif source["feature"]:
+            ambiguous_feature_counts[source["feature"]] += 1
         layer_counts[source["layer"]] += 1
         if source["package"] and source["module"]:
             package_owner[source["package"]] = source["module"]
@@ -285,37 +563,47 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
     settings_files = [p.relative_to(root).as_posix() for p in all_files if p.name in {"settings.gradle", "settings.gradle.kts"}]
     catalogs = [p.relative_to(root).as_posix() for p in all_files if p.name == "libs.versions.toml"]
     wrappers = [p.relative_to(root).as_posix() for p in all_files if p.name == "gradle-wrapper.properties"]
-    plugin_ids = {plugin for module in modules for plugin in module["plugins"]}
+    detected_plugin_ids = {plugin for module in modules for plugin in module["plugins"]}
+    graph = {module["path"]: module["project_dependencies"] for module in modules}
+    cycles = detect_cycles(graph)
     detected = {
         "gradle": bool(build_files or settings_files),
-        "kotlin_multiplatform": any("multiplatform" in p.lower() or "kmp" in p.lower() for p in plugin_ids),
-        "android": any("android" in p.lower() for p in plugin_ids) or any("/androidmain/" in s["path"].lower() for s in raw_sources),
-        "compose": any("compose" in p.lower() for p in plugin_ids) or any(i.startswith(("androidx.compose", "org.jetbrains.compose")) for s in raw_sources for i in s["imports"]),
+        "kotlin_multiplatform": any("multiplatform" in p.lower() or "kmp" in p.lower() for p in detected_plugin_ids),
+        "android": any("android" in p.lower() for p in detected_plugin_ids) or any("/androidmain/" in s["path"].lower() for s in raw_sources),
+        "compose": any("compose" in p.lower() for p in detected_plugin_ids) or any(i.startswith(("androidx.compose", "org.jetbrains.compose")) for s in raw_sources for i in s["imports"]),
     }
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "root": str(root),
+        "root": ".",
         "project": {
+            "name": root.name,
             "root_package": root_package,
             "detected": detected,
             "settings_files": sorted(settings_files),
             "version_catalogs": sorted(catalogs),
             "gradle_wrappers": sorted(wrappers),
+            "included_builds": sorted(path.relative_to(root).as_posix() for path in included_build_roots(root)),
+            "capabilities": capability_inventory(modules, raw_sources),
         },
         "summary": {
             "module_count": len(modules),
             "source_file_count": len(raw_sources),
+            "owned_artifact_count": len(artifacts),
+            "artifact_kinds": dict(collections.Counter(item["kind"] for item in artifacts).most_common()),
             "feature_candidates": dict(feature_counts.most_common()),
+            "ambiguous_feature_candidates": dict(ambiguous_feature_counts.most_common()),
             "layer_candidates": dict(layer_counts.most_common()),
             "external_import_families": dict(external_imports.most_common(100)),
         },
         "modules": modules,
         "sources": raw_sources,
+        "artifacts": artifacts,
         "feature_coupling": [
             {"from": source, "to": target, "import_count": count}
             for (source, target), count in sorted(coupling.items())
         ],
+        "module_cycles": cycles,
         "parse_warnings": parse_warnings,
     }
 
@@ -329,6 +617,7 @@ def markdown_report(data: dict) -> str:
         f"- Root package: `{project.get('root_package') or 'not inferred'}`",
         f"- Modules: {summary['module_count']}",
         f"- Kotlin/Java source files: {summary['source_file_count']}",
+        f"- Manifests/resources/schemas/native artifacts: {summary['owned_artifact_count']}",
         f"- Detected platform flags: `{json.dumps(project['detected'], sort_keys=True)}`",
         "",
         "## Candidate features",
@@ -340,6 +629,12 @@ def markdown_report(data: dict) -> str:
         lines.append(f"| `{name}` | {count} |")
     if not summary["feature_candidates"]:
         lines.append("| _No reliable candidates_ | 0 |")
+    lines += ["", "Package-only candidates outside existing feature modules require review:", ""]
+    if summary.get("ambiguous_feature_candidates"):
+        for name, count in summary["ambiguous_feature_candidates"].items():
+            lines.append(f"- `{name}`: {count} file(s)")
+    else:
+        lines.append("None.")
     lines += ["", "## Candidate layers", "", "| Layer | Files |", "|---|---:|"]
     for layer, count in summary["layer_candidates"].items():
         lines.append(f"| `{layer}` | {count} |")
@@ -347,18 +642,60 @@ def markdown_report(data: dict) -> str:
     for module in data["modules"]:
         deps = ", ".join(f"`{d}`" for d in module["project_dependencies"]) or "none detected"
         lines.append(f"- `{module['path']}` → {deps}")
+    lines += ["", "## Existing module cycles", ""]
+    if data["module_cycles"]:
+        for cycle in data["module_cycles"]:
+            lines.append(f"- `{' -> '.join(cycle)}`")
+    else:
+        lines.append("None detected by static project dependency parsing.")
+    lines += ["", "## Detected library capabilities", ""]
+    if project.get("capabilities"):
+        for name, evidence in sorted(project["capabilities"].items()):
+            lines.append(f"- `{name}` — plugins: {evidence['plugins'] or 'none'}; dependencies: {evidence.get('dependencies') or 'none'}; imports: {evidence['import_families'] or 'none'}")
+    else:
+        lines.append("No capability evidence detected; inspect build files manually.")
     lines += ["", "## Cross-candidate imports", ""]
     if data["feature_coupling"]:
         for edge in sorted(data["feature_coupling"], key=lambda e: -e["import_count"]):
             lines.append(f"- `{edge['from']}` → `{edge['to']}`: {edge['import_count']} imports")
     else:
         lines.append("No cross-candidate imports detected.")
-    uncertain = [s for s in data["sources"] if s["layer"] == "unknown" or s["layer_confidence"] == "low"]
-    lines += ["", "## Manual review queue", "", f"{len(uncertain)} low-confidence or unknown files.", ""]
+    def needs_manual_review(source: dict) -> bool:
+        module_parts = [part.lower() for part in (source.get("module") or "").split(":") if part]
+        stable_non_feature_owner = bool(
+            module_parts and module_parts[0] in {"core", "util", "utility", "test", "build-logic", "buildsrc", "plugins"}
+        )
+        return (
+            source.get("layer") == "unknown"
+            or source.get("layer_confidence") == "low"
+            or source.get("feature_confidence") == "low"
+            or not stable_non_feature_owner and source.get("feature_confidence") == "unknown"
+            or not stable_non_feature_owner and source.get("layer") == "platform"
+        )
+
+    uncertain = [source for source in data["sources"] if needs_manual_review(source)]
+    lines += [
+        "",
+        "## Manual review queue",
+        "",
+        f"{len(uncertain)} file(s) have uncertain feature ownership, layer ownership, or platform placement.",
+        "",
+    ]
     for source in uncertain[:100]:
-        lines.append(f"- `{source['path']}` — layer `{source['layer']}`, feature `{source.get('feature') or 'unknown'}`")
+        lines.append(
+            f"- `{source['path']}` — layer `{source['layer']}` ({source.get('layer_confidence', 'unknown')}), "
+            f"feature `{source.get('feature') or 'unknown'}` ({source.get('feature_confidence', 'unknown')})"
+        )
     if len(uncertain) > 100:
         lines.append(f"- … {len(uncertain) - 100} more in the JSON artifact")
+    unresolved_artifacts = [item for item in data["artifacts"] if not item.get("feature") and not item.get("module")]
+    lines += ["", "## Owned non-code artifacts", "", f"{len(data['artifacts'])} manifest/resource/schema/native artifact(s) inventoried.", ""]
+    for kind, count in summary.get("artifact_kinds", {}).items():
+        lines.append(f"- `{kind}`: {count}")
+    if unresolved_artifacts:
+        lines += ["", "Artifacts without a module or feature owner:", ""]
+        for item in unresolved_artifacts[:100]:
+            lines.append(f"- `{item['path']}` — `{item['kind']}`")
     lines += ["", "## Parse warnings", ""]
     if data["parse_warnings"]:
         for warning in data["parse_warnings"]:
