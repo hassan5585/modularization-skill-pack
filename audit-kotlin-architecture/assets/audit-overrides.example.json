@@ -9,10 +9,19 @@
   "features": [
     {
       "name": "orders",
-      "package_prefixes": ["com.example.orders", "com.example.checkout"],
+      "package_prefixes": ["com.example.orders"],
       "path_prefixes": ["app/src/main/kotlin/com/example/orders"],
       "include_globs": [],
-      "exclude_globs": []
+      "exclude_globs": [],
+      "target_layers": ["domain", "data", "navigation", "shared-ui", "ui"]
+    },
+    {
+      "name": "checkout",
+      "package_prefixes": ["com.example.checkout"],
+      "path_prefixes": ["app/src/main/kotlin/com/example/checkout"],
+      "include_globs": [],
+      "exclude_globs": [],
+      "target_layers": ["domain", "data", "navigation", "ui"]
     }
   ],
   "file_overrides": {
@@ -24,5 +33,11 @@
   },
   "shared_assignments": {
     "app/src/main/kotlin/com/example/time/Clock.kt": ":util:time:domain"
-  }
+  },
+  "shared_ui_dependencies": [
+    {
+      "consumer": ":feature:checkout:ui",
+      "provider": ":feature:orders:shared-ui"
+    }
+  ]
 }

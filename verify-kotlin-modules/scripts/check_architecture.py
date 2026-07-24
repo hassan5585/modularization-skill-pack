@@ -17,7 +17,7 @@ DEFAULT_EXCLUDES = {".git", ".gradle", ".idea", ".kotlin", "build", "out", "node
 PROJECT_RES = [
     re.compile(r"project\(\s*[\"'](:[^\"']+)[\"']\s*\)"),
     re.compile(r"project\(\s*path\s*[:=]\s*[\"'](:[^\"']+)[\"']"),
-    re.compile(r"\bprojects\.([A-Za-z0-9_.]+)"),
+    re.compile(r"(?<![A-Za-z0-9_.])projects\.([A-Za-z0-9_.]+)"),
 ]
 PACKAGE_RE = re.compile(r"(?m)^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)")
 IMPORT_RE = re.compile(r"(?m)^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\.\*)?)")
@@ -34,12 +34,78 @@ PLUGIN_REGISTRATION_START_RE = re.compile(r"\b(?:register|create)\s*\(\s*[\"'][^
 REGISTERED_PLUGIN_ID_RE = re.compile(r"\bid\s*=\s*[\"']([^\"']+)[\"']")
 IMPLEMENTATION_CLASS_RE = re.compile(r"\bimplementationClass\s*=\s*[\"']([^\"']+)[\"']")
 DEFAULT_FORBIDDEN = {
-    "domain": ["data", "navigation", "ui", "app", "test-support"],
-    "data": ["navigation", "ui", "app", "test-support"],
-    "navigation": ["data", "ui", "app", "test-support"],
+    "domain": ["data", "navigation", "shared-ui", "ui", "app", "test-support"],
+    "data": ["navigation", "shared-ui", "ui", "app", "test-support"],
+    "navigation": ["data", "shared-ui", "ui", "app", "test-support"],
+    "shared-ui": ["data", "shared-ui", "app", "test-support"],
     "ui": ["data", "app", "test-support"],
     "aggregation": ["test-support"],
 }
+NON_SUPPRESSIBLE_RULES = {
+    "shared-ui-to-shared-ui",
+    "lower-layer-to-shared-ui",
+    "feature-root-to-foreign-shared-ui",
+    "invalid-shared-ui-consumer",
+    "shared-ui-to-forbidden-layer",
+    "shared-ui-to-foreign-feature-contract",
+    "shared-ui-to-feature-ui",
+    "shared-ui-to-feature-root",
+}
+
+
+def strip_gradle_comments(text: str) -> str:
+    result: list[str] = []
+    index = 0
+    quote: str | None = None
+    triple_quoted = False
+    block_depth = 0
+    while index < len(text):
+        if block_depth and text.startswith("/*", index):
+            block_depth += 1
+            result.append("  ")
+            index += 2
+        elif block_depth and text.startswith("*/", index):
+            block_depth -= 1
+            result.append("  ")
+            index += 2
+        elif block_depth:
+            result.append("\n" if text[index] == "\n" else " ")
+            index += 1
+        elif quote and triple_quoted:
+            delimiter = quote * 3
+            if text.startswith(delimiter, index):
+                result.append(delimiter)
+                index += 3
+                quote = None
+                triple_quoted = False
+            else:
+                result.append(text[index])
+                index += 1
+        elif quote:
+            character = text[index]
+            result.append(character)
+            index += 1
+            if character == "\\" and index < len(text):
+                result.append(text[index])
+                index += 1
+            elif character == quote:
+                quote = None
+        elif text.startswith("//", index):
+            while index < len(text) and text[index] != "\n":
+                index += 1
+        elif text.startswith("/*", index):
+            block_depth = 1
+            result.append("  ")
+            index += 2
+        elif text[index] in {'"', "'"}:
+            quote = text[index]
+            triple_quoted = text.startswith(quote * 3, index)
+            result.append(quote * 3 if triple_quoted else quote)
+            index += 3 if triple_quoted else 1
+        else:
+            result.append(text[index])
+            index += 1
+    return "".join(result)
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,7 +128,11 @@ def load_rules(path: Path | None) -> dict:
             "test_support_names": ["test", "test-support", "fixtures"],
             "module_roles": {},
             "forbidden_target_roles": DEFAULT_FORBIDDEN,
-            "cross_feature": {"severity": "warning", "allowed_target_roles": ["domain", "navigation"]},
+            "cross_feature": {
+                "severity": "warning",
+                "allowed_target_roles": ["domain", "navigation"],
+                "allowed_role_edges": {"ui": ["shared-ui"]},
+            },
             "ignored_paths": [],
             "ignored_import_prefixes": [],
             "exceptions": [],
@@ -83,6 +153,16 @@ def load_rules(path: Path | None) -> dict:
         raise ValueError(f"unsupported schema_version: {data.get('schema_version')!r}")
     if data.get("cross_feature", {}).get("severity", "warning") not in {"error", "warning", "info"}:
         raise ValueError("cross_feature.severity must be error, warning, or info")
+    cross_feature = data.setdefault("cross_feature", {})
+    allowed_role_edges = cross_feature.setdefault("allowed_role_edges", {})
+    if not isinstance(allowed_role_edges, dict) or any(
+        not isinstance(source, str)
+        or not isinstance(targets, list)
+        or any(not isinstance(target, str) for target in targets)
+        for source, targets in allowed_role_edges.items()
+    ):
+        raise ValueError("cross_feature.allowed_role_edges must map source roles to target-role lists")
+    allowed_role_edges.setdefault("ui", ["shared-ui"])
     feature_layer_overrides = data.get("required_feature_layers_by_feature", {})
     if not isinstance(feature_layer_overrides, dict) or any(not isinstance(value, list) for value in feature_layer_overrides.values()):
         raise ValueError("required_feature_layers_by_feature must map feature names (or `*`) to layer lists")
@@ -97,6 +177,8 @@ def load_rules(path: Path | None) -> dict:
             raise ValueError(f"exception is missing required fields {missing}: {item}")
         if any(token in item["source"] or token in item["target"] for token in ("*", "?", "[", "]")):
             raise ValueError(f"exception source/target must be exact, not wildcard patterns: {item}")
+        if item["rule"] in NON_SUPPRESSIBLE_RULES:
+            raise ValueError(f"shared-ui hard rule cannot be suppressed: {item['rule']}")
     return data
 
 
@@ -133,7 +215,7 @@ def role_for(directory: Path, root: Path, rules: dict) -> str:
         if fnmatch.fnmatch(rel, pattern):
             return role
     last = directory.name.lower()
-    if last in {"domain", "data", "navigation", "ui"}:
+    if last in {"domain", "data", "navigation", "shared-ui", "ui"}:
         return last
     if last in set(rules.get("test_support_names", [])):
         return "test-support"
@@ -167,12 +249,57 @@ def owner_for(path: Path, root: Path, by_dir: dict[Path, dict]) -> dict | None:
     return None
 
 
-def project_dependencies(text: str) -> tuple[list[str], list[str]]:
+def gradle_accessor_segment(segment: str) -> str:
+    parts = re.split(r"[-_]+", segment)
+    return parts[0] + "".join(
+        part[:1].upper() + part[1:] for part in parts[1:]
+    )
+
+
+def gradle_project_accessor(module: str) -> str:
+    return ".".join(
+        gradle_accessor_segment(segment)
+        for segment in module.split(":")
+        if segment
+    )
+
+
+def normalize_project_dependency(
+    value: str,
+    known_modules: set[str] | None = None,
+) -> str:
+    if value.startswith(":"):
+        return value
+    if known_modules:
+        accessor_matches = [
+            module
+            for module in known_modules
+            if gradle_project_accessor(module) == value
+        ]
+        if len(accessor_matches) == 1:
+            return accessor_matches[0]
+    segments = value.split(".")
+    literal = ":" + ":".join(segments)
+    kebab = ":" + ":".join(
+        re.sub(r"(?<!^)(?=[A-Z])", "-", segment).lower()
+        for segment in segments
+    )
+    if known_modules:
+        for candidate in (literal, kebab):
+            if candidate in known_modules:
+                return candidate
+    return kebab if "sharedUi" in segments else literal
+
+
+def project_dependencies(
+    text: str,
+    known_modules: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
     """Separate project dependencies found in production and test Gradle blocks.
 
     This is a lightweight brace-aware parser. It deliberately reports only static
-    project("...") expressions and treats any surrounding block/configuration
-    containing `test` as test-only.
+    project references and treats any surrounding block/configuration containing
+    `test` as test-only.
     """
     matches = sorted(
         ((match.start(), match.group(1)) for regex in PROJECT_RES for match in regex.finditer(text)),
@@ -181,8 +308,7 @@ def project_dependencies(text: str) -> tuple[list[str], list[str]]:
     production: set[str] = set()
     tests: set[str] = set()
     for position, dependency in matches:
-        if not dependency.startswith(":"):
-            dependency = ":" + dependency.replace(".", ":")
+        dependency = normalize_project_dependency(dependency, known_modules)
         stack: list[str] = []
         last_boundary = 0
         for index, char in enumerate(text[:position]):
@@ -280,7 +406,9 @@ def validate_included_build(
         add_finding(findings, rules, "missing-convention-build-settings", "error", ":", relative, "Convention included build has no settings.gradle(.kts).")
         return
 
-    settings_text = settings.read_text(encoding="utf-8", errors="replace")
+    settings_text = strip_gradle_comments(
+        settings.read_text(encoding="utf-8", errors="replace")
+    )
     registered_modules = set(STATIC_MODULE_RE.findall(settings_text))
     build_files = find_build_files(build_root, [])
     registrations: list[dict] = []
@@ -296,7 +424,9 @@ def validate_included_build(
                 settings.relative_to(root).as_posix(),
                 "Convention included-build subproject has a build file but is not statically registered in its settings file.",
             )
-        text = build_file.read_text(encoding="utf-8", errors="replace")
+        text = strip_gradle_comments(
+            build_file.read_text(encoding="utf-8", errors="replace")
+        )
         for registration in convention_plugin_registrations(text):
             registration["build_file"] = build_file.relative_to(root).as_posix()
             registrations.append(registration)
@@ -339,9 +469,73 @@ def is_test_source(path: Path, root: Path) -> bool:
 
 
 def exception_for(rule_id: str, source: str, target: str, rules: dict) -> dict | None:
+    if rule_id in NON_SUPPRESSIBLE_RULES:
+        return None
     for item in rules.get("exceptions", []):
         if item.get("rule") == rule_id and item.get("source") == source and item.get("target") == target:
             return item
+    return None
+
+
+def cross_feature_allowed(source_role: str, target_role: str, rules: dict) -> bool:
+    policy = rules.get("cross_feature", {})
+    if target_role in policy.get("allowed_target_roles", ["domain", "navigation"]):
+        return True
+    return target_role in policy.get("allowed_role_edges", {}).get(source_role, [])
+
+
+def shared_ui_violation(source: dict, target: dict) -> tuple[str, str] | None:
+    source_role = source.get("role")
+    target_role = target.get("role")
+    if target_role == "shared-ui":
+        if source_role == "shared-ui":
+            return (
+                "shared-ui-to-shared-ui",
+                "A feature shared-ui module must not depend on another shared-ui module.",
+            )
+        if source_role in {"domain", "data", "navigation"}:
+            return (
+                "lower-layer-to-shared-ui",
+                f"A {source_role} module must not depend on feature shared-ui.",
+            )
+        if source_role == "aggregation":
+            if source.get("feature") == target.get("feature"):
+                return None
+            return (
+                "feature-root-to-foreign-shared-ui",
+                "A feature root may aggregate only its own shared-ui module.",
+            )
+        if source_role == "ui" and source.get("feature"):
+            return None
+        return (
+            "invalid-shared-ui-consumer",
+            "Feature shared-ui may be consumed only by its owner root or a feature UI module.",
+        )
+    if source_role == "shared-ui" and target_role in {"data", "app", "test-support"}:
+        return (
+            "shared-ui-to-forbidden-layer",
+            f"A feature shared-ui module must not depend on {target_role}.",
+        )
+    if source_role != "shared-ui" or not target.get("feature"):
+        return None
+    if (
+        target.get("feature") != source.get("feature")
+        and target_role in {"domain", "navigation"}
+    ):
+        return (
+            "shared-ui-to-foreign-feature-contract",
+            "A feature shared-ui module may depend only on its owner's feature contracts.",
+        )
+    if target_role == "ui":
+        return (
+            "shared-ui-to-feature-ui",
+            "A feature shared-ui module must sit below regular feature UI modules.",
+        )
+    if target_role == "aggregation":
+        return (
+            "shared-ui-to-feature-root",
+            "A feature shared-ui module must not depend on a feature aggregation root.",
+        )
     return None
 
 
@@ -391,9 +585,19 @@ def analyze(root: Path, rules: dict) -> dict:
     ignored = rules.get("ignored_paths", [])
     modules = []
     by_dir: dict[Path, dict] = {}
-    for build_file in find_build_files(root, ignored):
-        text = build_file.read_text(encoding="utf-8", errors="replace")
-        production_dependencies, test_dependencies = project_dependencies(text)
+    build_files = find_build_files(root, ignored)
+    known_modules = {
+        module_path(build_file.parent, root)
+        for build_file in build_files
+    }
+    for build_file in build_files:
+        text = strip_gradle_comments(
+            build_file.read_text(encoding="utf-8", errors="replace")
+        )
+        production_dependencies, test_dependencies = project_dependencies(
+            text,
+            known_modules,
+        )
         module = {
             "path": module_path(build_file.parent, root),
             "directory": build_file.parent.relative_to(root).as_posix() or ".",
@@ -411,7 +615,11 @@ def analyze(root: Path, rules: dict) -> dict:
 
     conventions = rules.get("conventions", {})
     root_settings = next((root / name for name in ("settings.gradle.kts", "settings.gradle") if (root / name).is_file()), None)
-    root_settings_text = root_settings.read_text(encoding="utf-8", errors="replace") if root_settings else ""
+    root_settings_text = (
+        strip_gradle_comments(root_settings.read_text(encoding="utf-8", errors="replace"))
+        if root_settings
+        else ""
+    )
     configured_included_builds = set(conventions.get("included_builds", []))
     observed_included_builds = set(INCLUDE_BUILD_RE.findall(root_settings_text))
     for required_build in sorted(configured_included_builds - observed_included_builds):
@@ -445,7 +653,9 @@ def analyze(root: Path, rules: dict) -> dict:
         if not settings:
             add_finding(findings, rules, "settings-registration", "error", ":", "settings.gradle(.kts)", "Settings registration checking is enabled but no root settings file exists.")
         else:
-            settings_text = settings.read_text(encoding="utf-8", errors="replace")
+            settings_text = strip_gradle_comments(
+                settings.read_text(encoding="utf-8", errors="replace")
+            )
             registered = set(re.findall(r"[\"'](:[A-Za-z0-9_:-]+)[\"']", settings_text))
             for module in modules:
                 if module["path"] != ":" and module["path"] not in registered:
@@ -475,13 +685,23 @@ def analyze(root: Path, rules: dict) -> dict:
             target = by_path.get(target_path)
             if not target:
                 continue
-            if source["role"] != "test-support" and target["role"] == "test-support":
+            shared_ui_error = shared_ui_violation(source, target)
+            if shared_ui_error:
+                add_finding(
+                    findings,
+                    rules,
+                    shared_ui_error[0],
+                    "error",
+                    source["path"],
+                    target_path,
+                    shared_ui_error[1],
+                )
+            elif source["role"] != "test-support" and target["role"] == "test-support":
                 add_finding(findings, rules, "production-test-dependency", "error", source["path"], target_path, "Production module depends on test-support.")
             elif target["role"] in forbidden.get(source["role"], []):
                 add_finding(findings, rules, "forbidden-layer-dependency", "error", source["path"], target_path, f"Role `{source['role']}` must not depend on `{target['role']}`.")
             if source.get("feature") and target.get("feature") and source["feature"] != target["feature"]:
-                allowed = rules.get("cross_feature", {}).get("allowed_target_roles", ["domain", "navigation"])
-                if target["role"] not in allowed:
+                if not shared_ui_error and not cross_feature_allowed(source["role"], target["role"], rules):
                     add_finding(findings, rules, "cross-feature-dependency", rules.get("cross_feature", {}).get("severity", "warning"), source["path"], target_path, f"Cross-feature dependency targets role `{target['role']}`.")
 
     for cycle in detect_cycles(graph):
@@ -536,13 +756,24 @@ def analyze(root: Path, rules: dict) -> dict:
             if not target:
                 continue
             file_rel = path.relative_to(root).as_posix()
-            if target["role"] in forbidden.get(source["role"], []):
+            shared_ui_error = shared_ui_violation(source, target)
+            if shared_ui_error:
+                add_finding(
+                    findings,
+                    rules,
+                    shared_ui_error[0],
+                    "error",
+                    source["path"],
+                    target_path,
+                    f"{shared_ui_error[1]} Import: `{imported}`.",
+                    file_rel,
+                )
+            elif target["role"] in forbidden.get(source["role"], []):
                 add_finding(findings, rules, "forbidden-layer-import", "error", source["path"], target_path, f"Imports `{imported}` from forbidden role `{target['role']}`.", file_rel)
             if direct_import_severity and target_path not in source["dependencies"]:
                 add_finding(findings, rules, "undeclared-project-import", direct_import_severity, source["path"], target_path, f"Imports `{imported}` without a statically detected direct production project dependency.", file_rel)
             if source.get("feature") and target.get("feature") and source["feature"] != target["feature"]:
-                allowed = rules.get("cross_feature", {}).get("allowed_target_roles", ["domain", "navigation"])
-                if target["role"] not in allowed:
+                if not shared_ui_error and not cross_feature_allowed(source["role"], target["role"], rules):
                     add_finding(findings, rules, "cross-feature-import", rules.get("cross_feature", {}).get("severity", "warning"), source["path"], target_path, f"Imports `{imported}` from feature `{target['feature']}` role `{target['role']}`.", file_rel)
 
     severity_order = {"error": 0, "warning": 1, "info": 2}

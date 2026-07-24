@@ -18,11 +18,19 @@ Use this as a default, not a reason to ignore the target repository:
 application / shared application shell
   -> feature:<name> aggregation roots
        -> feature:<name>:ui
+       -> feature:<name>:shared-ui (optional)
        -> feature:<name>:data
        -> feature:<name>:navigation
        -> feature:<name>:domain
 
 feature:<name>:ui
+  -> feature:<name>:domain
+  -> feature:<name>:navigation
+  -> core:ui
+  -> utility contracts
+  -> own or another feature's shared-ui
+
+feature:<name>:shared-ui (optional)
   -> feature:<name>:domain
   -> feature:<name>:navigation
   -> core:ui
@@ -101,6 +109,19 @@ Own presentation:
 
 UI depends on domain ports. It should not instantiate or import data implementations directly.
 
+### Shared UI
+
+Own feature-specific presentation reused by one or more feature UI modules:
+
+- reusable views/composables and their resources;
+- UI models, display formatters, and presentation helpers;
+- provider-owned interaction contracts that remain UI concerns.
+
+Apply the same platform/UI conventions as regular UI, but keep the dependency
+role distinct. A shared-UI module sits below every consuming UI. It must not
+depend on a regular feature UI, a feature aggregation root, or any other
+shared-UI module. Keep app-wide design-system primitives in core UI.
+
 ### Test support
 
 Own reusable testing infrastructure, not test cases:
@@ -119,10 +140,11 @@ The most important property is direction, not the number of modules.
 
 | From | Usually allowed | Usually forbidden |
 |---|---|---|
-| domain | core domain, pure utility contracts | data, UI, navigation UI, HTTP, DB, platform UI |
-| data | own domain, core data/domain, utility contracts/real | UI, navigation UI, other feature implementation |
-| navigation | own domain, core navigation, route serialization | data implementation, UI implementation |
-| UI | own domain/navigation, core UI, utility contracts | own data implementation, unrelated feature UI |
+| domain | core domain, pure utility contracts | data, UI, shared UI, navigation UI, HTTP, DB, platform UI |
+| data | own domain, core data/domain, utility contracts/real | UI, shared UI, navigation UI, other feature implementation |
+| navigation | own domain, core navigation, route serialization | data implementation, UI/shared-UI implementation |
+| shared UI | owner domain/navigation, core UI, utility contracts | feature UI/root, data, every other shared UI |
+| UI | own domain/navigation, core UI, utility contracts, approved feature shared UI | own data implementation, unrelated feature UI |
 | aggregation | own production layers | test support, behavior implementation |
 | test support | downstream-safe contracts and shared test foundations | production app/aggregation, same module when it creates a cycle |
 
@@ -131,9 +153,11 @@ Cross-feature dependencies require a design decision. Prefer:
 1. a destination/entry contract;
 2. an app-wide domain contract in core;
 3. a reusable utility contract;
-4. an explicitly named shared feature contract.
+4. an explicitly named shared feature contract;
+5. provider-owned `shared-ui` when the dependency is specifically UI reuse.
 
-Direct feature-UI-to-feature-UI dependencies are a warning even when they compile.
+Allow `feature:B:ui -> feature:A:shared-ui` directly. Do not allow
+`feature:B:ui -> feature:A:ui` or any `shared-ui -> shared-ui` chain.
 
 ## 4. Feature, core, and utility decisions
 
@@ -143,7 +167,8 @@ Ask these questions in order:
 2. Is it a stable foundation used by many unrelated features? Consider `core`.
 3. Is it an independently replaceable cross-cutting capability with a contract and implementation, such as authentication, analytics, permissions, or platform services? Consider `util:<name>:domain/real[/ui]`.
 4. Is it shared by exactly two features because one calls the other? Prefer a narrow contract owned by the providing feature or app shell before promoting to core.
-5. Is the abstraction speculative? Leave it with the first owner.
+5. Is the shared surface UI owned by the provider? Consider the provider’s optional `shared-ui`.
+6. Is the abstraction speculative? Leave it with the first owner.
 
 High fan-in alone does not make a concept core. Volatility and semantic ownership matter.
 
@@ -196,6 +221,8 @@ Create platform-specific base conventions and share capability plugins only wher
 - Creating a `common` dumping ground.
 - Making domain serializable/UI-aware because it is convenient.
 - Letting UI depend on data implementations.
+- Letting regular feature UIs depend directly on each other.
+- Chaining feature shared-UI modules instead of composing at the consumer.
 - Adding every library through the base plugin.
 - Putting test fakes in production modules.
 - Creating test-support cycles.

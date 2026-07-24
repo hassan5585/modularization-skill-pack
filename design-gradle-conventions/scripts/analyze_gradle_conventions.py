@@ -25,10 +25,65 @@ DEPENDENCY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s*\(\s*(.+?)\s*\)\s
 DEPENDENCY_GROOVY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s+([^={}].+?)\s*$")
 DEPENDENCY_SUFFIXES = ("implementation", "api", "compileonly", "runtimeonly", "processor", "kapt", "ksp")
 PROJECT_RE = re.compile(r"project\(\s*(?:path\s*[:=]\s*)?[\"'](:[^\"']+)[\"']\s*\)")
-TYPE_SAFE_PROJECT_RE = re.compile(r"\bprojects\.([A-Za-z0-9_.]+)")
+TYPE_SAFE_PROJECT_RE = re.compile(r"(?<![A-Za-z0-9_.])projects\.([A-Za-z0-9_.]+)")
 ASSIGNMENT_RE = re.compile(r"^\s*([A-Za-z][A-Za-z0-9_.\[\]\"']*)\s*(?:=|\+=)\s*(.+?)\s*$")
 INCLUDE_BUILD_RE = re.compile(r"includeBuild\s*(?:\(\s*)?[\"']([^\"']+)[\"']")
 REGISTERED_PLUGIN_RE = re.compile(r"\bid\s*=\s*[\"']([^\"']+)[\"']")
+
+
+def strip_gradle_comments(text: str) -> str:
+    result: list[str] = []
+    index = 0
+    quote: str | None = None
+    triple_quoted = False
+    block_depth = 0
+    while index < len(text):
+        if block_depth and text.startswith("/*", index):
+            block_depth += 1
+            result.append("  ")
+            index += 2
+        elif block_depth and text.startswith("*/", index):
+            block_depth -= 1
+            result.append("  ")
+            index += 2
+        elif block_depth:
+            result.append("\n" if text[index] == "\n" else " ")
+            index += 1
+        elif quote and triple_quoted:
+            delimiter = quote * 3
+            if text.startswith(delimiter, index):
+                result.append(delimiter)
+                index += 3
+                quote = None
+                triple_quoted = False
+            else:
+                result.append(text[index])
+                index += 1
+        elif quote:
+            character = text[index]
+            result.append(character)
+            index += 1
+            if character == "\\" and index < len(text):
+                result.append(text[index])
+                index += 1
+            elif character == quote:
+                quote = None
+        elif text.startswith("//", index):
+            while index < len(text) and text[index] != "\n":
+                index += 1
+        elif text.startswith("/*", index):
+            block_depth = 1
+            result.append("  ")
+            index += 2
+        elif text[index] in {'"', "'"}:
+            quote = text[index]
+            triple_quoted = text.startswith(quote * 3, index)
+            result.append(quote * 3 if triple_quoted else quote)
+            index += 3 if triple_quoted else 1
+        else:
+            result.append(text[index])
+            index += 1
+    return "".join(result)
 
 
 def args() -> argparse.Namespace:
@@ -50,7 +105,9 @@ def included_build_roots(root: Path) -> set[Path]:
     settings = next((root / name for name in ("settings.gradle.kts", "settings.gradle") if (root / name).is_file()), None)
     if not settings:
         return set()
-    text = settings.read_text(encoding="utf-8", errors="replace")
+    text = strip_gradle_comments(
+        settings.read_text(encoding="utf-8", errors="replace")
+    )
     result = set()
     for relative in INCLUDE_BUILD_RE.findall(text):
         candidate = (root / relative).resolve()
@@ -81,7 +138,7 @@ def role_for(path: Path, root: Path) -> str:
     if not parts:
         return "root"
     last = parts[-1]
-    if last in {"domain", "data", "navigation", "ui"}:
+    if last in {"domain", "data", "navigation", "shared-ui", "ui"}:
         return last
     if last in {"test", "test-support", "fixtures"}:
         return "test-support"
@@ -98,14 +155,54 @@ def role_for(path: Path, root: Path) -> str:
     return "library"
 
 
-def normalize_dependency(expr: str) -> str:
+def gradle_accessor_segment(segment: str) -> str:
+    parts = re.split(r"[-_]+", segment)
+    return parts[0] + "".join(
+        part[:1].upper() + part[1:] for part in parts[1:]
+    )
+
+
+def gradle_project_accessor(module: str) -> str:
+    return ".".join(
+        gradle_accessor_segment(segment)
+        for segment in module.split(":")
+        if segment
+    )
+
+
+def normalize_dependency(
+    expr: str,
+    known_modules: set[str] | None = None,
+) -> str:
     expr = re.sub(r"\s+", " ", expr.strip())
     project = PROJECT_RE.search(expr)
     if project:
         return f"project({project.group(1)})"
     type_safe = TYPE_SAFE_PROJECT_RE.search(expr)
     if type_safe:
-        return "project(:" + type_safe.group(1).replace(".", ":") + ")"
+        accessor = type_safe.group(1)
+        accessor_matches = [
+            module
+            for module in known_modules or set()
+            if gradle_project_accessor(module) == accessor
+        ]
+        if len(accessor_matches) == 1:
+            return f"project({accessor_matches[0]})"
+        segments = accessor.split(".")
+        literal = ":" + ":".join(segments)
+        kebab = ":" + ":".join(
+            re.sub(r"(?<!^)(?=[A-Z])", "-", segment).lower()
+            for segment in segments
+        )
+        dependency = next(
+            (
+                candidate
+                for candidate in (literal, kebab)
+                if known_modules and candidate in known_modules
+            ),
+            kebab if "sharedUi" in segments else literal,
+        )
+        return f"project({dependency})"
     alias = re.search(r"libs\.([A-Za-z0-9_.-]+)", expr)
     if alias:
         return f"libs.{alias.group(1)}"
@@ -145,15 +242,23 @@ def significant_assignments(text: str) -> list[str]:
 def analyze(root: Path, excludes: set[str]) -> dict:
     modules = []
     warnings = []
-    for file in build_files(root, excludes):
+    files = build_files(root, excludes)
+    known_modules = {
+        ":" + ":".join(file.parent.relative_to(root).parts)
+        if file.parent != root
+        else ":"
+        for file in files
+    }
+    for file in files:
         try:
             text = file.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             text = file.read_text(encoding="utf-8", errors="replace")
             warnings.append({"path": file.relative_to(root).as_posix(), "warning": "invalid UTF-8 replaced"})
+        text = strip_gradle_comments(text)
         plugins = applied_plugins(text)
         dependency_values = {
-            (match.group(1), normalize_dependency(match.group(2)))
+            (match.group(1), normalize_dependency(match.group(2), known_modules))
             for pattern in (DEPENDENCY_RE, DEPENDENCY_GROOVY_RE)
             for match in pattern.finditer(text)
             if match.group(1).lower().endswith(DEPENDENCY_SUFFIXES)
@@ -199,7 +304,9 @@ def analyze(root: Path, excludes: set[str]) -> dict:
     registered_plugins: set[str] = set()
     for module in modules:
         if module["role"] == "build-logic":
-            text = (root / module["build_file"]).read_text(encoding="utf-8", errors="replace")
+            text = strip_gradle_comments(
+                (root / module["build_file"]).read_text(encoding="utf-8", errors="replace")
+            )
             registered_plugins.update(REGISTERED_PLUGIN_RE.findall(text))
     return {
         "schema_version": SCHEMA_VERSION,

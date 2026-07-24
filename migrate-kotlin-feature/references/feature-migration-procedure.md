@@ -34,6 +34,7 @@ feature/<name>/
   domain/
   data/
   navigation/
+  shared-ui/  # optional, only with reviewed consumer evidence
   ui/
   test/
 ```
@@ -42,7 +43,10 @@ The `test` child is reusable test support. Actual tests stay under each owning l
 
 Create repository-level `:test`-style foundations only when production-independent helpers have multiple module consumers. Create a core-contract fake module only for downstream feature/utility tests; core modules must not consume a fake module that depends back on core. Use the test-foundation scaffold spec as a reviewed starting point.
 
-The feature root may be omitted when the app deliberately depends on layers directly. If present, it aggregates production layers and may own feature-level DI/registration. It never depends on test support.
+The feature root may be omitted when the app deliberately depends on layers
+directly. If present, it aggregates its own production layers and may own
+feature-level DI/registration. It never depends on test support or another
+feature’s shared UI.
 
 ## 3. Dependency-first batches
 
@@ -66,11 +70,19 @@ Move DTOs, entities, mappers, repositories, clients, DAOs, and caches. Keep API/
 
 Move stable route/destination types and deep-link contracts. Keep screen construction in UI if it requires UI implementations.
 
-### Batch F: UI
+### Batch F: shared UI, when approved
+
+When approved reuse exists, first move provider-owned reusable UI into
+`shared-ui`. Use the same UI convention and resources, but a valid Kotlin
+package suffix such as `sharedui`. Compile and test it, then compile every
+consumer UI. Do not let it depend on a regular feature UI, any feature root,
+another feature’s contracts, or another `shared-ui`.
+
+### Batch G: UI
 
 Move presentation state, controllers/ViewModels, screens, resources, and UI helpers. Update generated resource imports and preview/test source sets.
 
-### Batch G: wiring and cleanup
+### Batch H: wiring and cleanup
 
 Register settings, app dependencies, DI, navigation, serializers, manifests, and native exports. Compile app/platform deliverables. Remove legacy sources and adapters.
 
@@ -125,6 +137,7 @@ Package moves can change generated or reflection identity even when Kotlin compi
 - Direct dependents and app compile.
 - DI, navigation, resources, generated code, persistence, and platform wiring work.
 - Architecture checks show no new forbidden edges or cycles.
+- Shared-UI providers are verified before consumers and no shared-UI chain exists.
 - Test support is absent from production dependency graphs.
 - Old sources, duplicate resources, and obsolete registrations are removed.
 - Temporary compatibility code has been removed or has a named owner and deletion condition.

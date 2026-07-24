@@ -140,13 +140,17 @@ Add shared test foundations only when the dependency graph does not cycle. Keep 
 | feature domain | KMP/Android/JVM library | serialization only if contract needs it, DI annotations if required, unit tests |
 | feature data | library | serialization, network, database, DI, unit tests as detected |
 | feature navigation | library | navigation, route serialization, unit tests |
+| feature shared UI | library | reuse the feature UI convention unchanged; UI/resources, navigation UI, DI, UI/unit tests |
 | feature UI | library | UI/resources, navigation UI, DI, UI/unit tests |
 | feature test support | library | fixtures/test libraries; no app/release |
 | feature aggregation | library | DI/aggregation only; child module dependencies |
 | core domain/data/navigation/UI | matching library | only the corresponding capability |
 | app/shared app | app base | feature roots, app DI, environment/release as needed |
 
-The matrix must name both the owning-module test convention and the test-support library convention when reusable support modules are part of the approved architecture.
+The matrix must name both the owning-module test convention and the test-support
+library convention when reusable support modules are part of the approved
+architecture. Do not create a separate shared-UI convention merely because its
+dependency role differs from regular UI.
 
 ## 7. Migration and validation
 

@@ -74,6 +74,22 @@ Positive signals:
 
 Pure display formatting may be UI if it exists only to render a feature; business calculations remain domain.
 
+### Shared UI
+
+Treat `shared-ui` as an ownership/dependency decision, not a content heuristic.
+Its files look like ordinary UI. Assign this layer only when:
+
+- the file already belongs to a `:feature:<owner>:shared-ui` module; or
+- reviewed evidence names a real feature UI consumer and preserves provider
+  ownership.
+
+Do not infer it from `shared`, `widget`, or `common` names. Record the consumer
+UI → provider shared-UI edge explicitly and reject any provider shared-UI →
+shared-UI chain.
+
+The plan’s `shared_ui_violations` queue must be empty and
+`plan_acceptance.shared_ui_graph` must be `pass` before migration begins.
+
 ### Test support
 
 Positive signals:
@@ -116,6 +132,9 @@ Candidate `core` code is stable, foundational, and broadly used. Candidate utili
 - Will extraction reduce or merely hide coupling?
 
 Prefer duplication of a tiny unstable helper over a premature shared abstraction.
+For provider-owned presentation reuse, prefer an optional feature `shared-ui`
+over moving business-specific UI to core. Keep generic design-system primitives
+in core UI.
 
 ## 5. Coupling and cycles
 

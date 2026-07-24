@@ -1,6 +1,6 @@
 ---
 name: audit-kotlin-architecture
-description: Inspect an Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repository and produce an evidence-backed inventory and modularization plan. Use before splitting a monolith, choosing feature boundaries, mapping files into domain/data/navigation/UI/test layers, identifying core or utility candidates, finding dependency cycles and hotspots, or determining which existing libraries and build capabilities must be preserved.
+description: Inspect an Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repository and produce an evidence-backed inventory and modularization plan. Use before splitting a monolith, choosing feature boundaries, mapping files into domain/data/navigation/UI/optional shared-UI/test layers, identifying core or utility candidates, finding dependency cycles and hotspots, or determining which existing libraries and build capabilities must be preserved.
 ---
 
 # Audit Kotlin Architecture
@@ -24,7 +24,7 @@ Build an evidence-backed model of the codebase before proposing moves. Treat scr
 
 4. Read [references/classification-heuristics.md](references/classification-heuristics.md), then inspect every low-confidence or unknown classification and every high-coupling candidate.
    Package-only candidates outside an existing `feature/*` graph remain unresolved until reviewed; this prevents app-shell helpers from silently becoming fake product features.
-5. Copy [assets/audit-overrides.example.json](assets/audit-overrides.example.json), replace all placeholders, and provide it to the planner when package-derived feature names are insufficient. Leave `target_feature_layers` empty to derive only evidenced/existing layers; fill it only after approving a uniform feature shape. Leave `shared_test_modules` and `foundation_modules` empty unless the audit proves those shared targets are required; existing top-level test-support modules are retained automatically when no override is supplied.
+5. Copy [assets/audit-overrides.example.json](assets/audit-overrides.example.json), replace all placeholders, and provide it to the planner when package-derived feature names are insufficient. Leave `target_feature_layers` empty to derive only evidenced/existing layers; fill it only after approving a uniform feature shape. Use a feature’s `target_layers` for an optional `shared-ui`; do not add it to every feature. Record reviewed `shared_ui_dependencies` so provider shared UI migrates before consumer UI. Leave `shared_test_modules` and `foundation_modules` empty unless the audit proves those shared targets are required; existing top-level test-support modules are retained automatically when no override is supplied.
 6. Generate a proposed module plan:
 
    ```bash
@@ -84,7 +84,12 @@ Reject boundaries based only on technical type (`screens`, `models`, `repositori
 
 ### Layer classification
 
-Classify each owned production file as `domain`, `data`, `navigation`, `ui`, `platform`, `di`, `test`, or `unknown`. Explain ambiguous cases. `di` usually follows the implementation it wires or lives in the feature aggregation module; do not create a separate DI layer by reflex.
+Classify each owned production file as `domain`, `data`, `navigation`,
+`shared-ui`, `ui`, `platform`, `di`, `test`, or `unknown`. Explain ambiguous
+cases. Assign `shared-ui` only when a module already owns the file or reviewed
+consumer evidence proves feature-owned UI reuse; UI-looking code alone remains
+`ui`. `di` usually follows the implementation it wires or lives in the feature
+aggregation module; do not create a separate DI layer by reflex.
 
 ### Shared-code decisions
 
@@ -93,9 +98,12 @@ Use:
 - `core:*` for stable app-wide foundations used broadly;
 - `util:<capability>:domain/real/ui` for an independently reusable cross-cutting service;
 - feature modules for feature-specific code, even if another feature temporarily calls it;
+- an optional provider-owned feature `shared-ui` when another feature UI needs a stable reusable surface;
 - a shared feature contract module only when direct feature integration is intentional and stable.
 
 Do not infer `core` merely from high fan-in; inspect semantics and volatility.
+Do not plan `shared-ui -> shared-ui` edges. Compose multiple providers in the
+consumer UI or promote a truly generic primitive to core UI.
 
 ## Quality gates
 
@@ -105,6 +113,10 @@ Before accepting the plan:
 - Account separately for every detected manifest, UI/resource file, database/network/serialization schema, shrinker rule, and native interop/platform source artifact.
 - Confirm the plan’s source-accounting total equals the audit source count across feature, shared, retained, and unresolved assignments.
 - List existing and proposed module cycles.
+- List every shared-UI provider/consumer edge and order provider migration before consumer UI.
+- Require `plan_acceptance.shared_ui_graph` to be `pass`; review every
+  `shared_ui_violations` entry and reject shared-UI chains, unsupported
+  consumers, foreign contracts, and lower-layer dependencies on shared UI.
 - Identify files with multiple feature candidates.
 - Separate observed facts from inferred ownership.
 - Include a pilot feature, dependency-first migration order, and verification commands.

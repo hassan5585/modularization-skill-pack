@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 SCHEMA_VERSION = 1
-PRODUCTION_LAYERS = ("domain", "data", "navigation", "ui")
+PRODUCTION_LAYERS = ("domain", "data", "navigation", "shared-ui", "ui")
 MODULE_PATH_RE = re.compile(r"^:[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)*$")
 FEATURE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 ASSIGNABLE_LAYERS = {*PRODUCTION_LAYERS, "test", "aggregation", "platform"}
@@ -60,6 +60,14 @@ def validate_overrides(overrides: dict) -> None:
             values = feature.get(field, [])
             if not isinstance(values, list) or not all(isinstance(value, str) and value for value in values):
                 raise ValueError(f"feature {feature['name']} {field} must be a list of non-empty strings")
+        target_layers = feature.get("target_layers")
+        if target_layers is not None and (
+            not isinstance(target_layers, list)
+            or any(layer not in PRODUCTION_LAYERS for layer in target_layers)
+        ):
+            raise ValueError(
+                f"feature {feature['name']} target_layers must contain only {list(PRODUCTION_LAYERS)}"
+            )
     file_overrides = overrides.get("file_overrides", {})
     if not isinstance(file_overrides, dict):
         raise ValueError("file_overrides must be an object")
@@ -78,6 +86,25 @@ def validate_overrides(overrides: dict) -> None:
         for path, target in shared.items()
     ):
         raise ValueError("shared_assignments must map repository-relative paths to absolute Gradle module paths")
+    shared_ui_dependencies = overrides.get("shared_ui_dependencies", [])
+    if not isinstance(shared_ui_dependencies, list):
+        raise ValueError("shared_ui_dependencies must be a list")
+    for edge in shared_ui_dependencies:
+        if not isinstance(edge, dict) or set(edge) != {"consumer", "provider"}:
+            raise ValueError("shared_ui_dependencies entries require only consumer and provider")
+        consumer = edge.get("consumer")
+        provider = edge.get("provider")
+        if (
+            not isinstance(consumer, str)
+            or not MODULE_PATH_RE.fullmatch(consumer)
+            or not consumer.endswith(":ui")
+            or not isinstance(provider, str)
+            or not MODULE_PATH_RE.fullmatch(provider)
+            or not provider.endswith(":shared-ui")
+        ):
+            raise ValueError(
+                "shared_ui_dependencies require an absolute :...:ui consumer and :...:shared-ui provider"
+            )
 
 
 def matches_prefix(value: str | None, prefixes: list[str]) -> bool:
@@ -142,12 +169,103 @@ def retained_target(source: dict) -> str | None:
 def proposed_artifact_layer(artifact: dict, forced: str | None) -> str:
     if forced:
         return forced
+    if artifact.get("module", "").endswith(":shared-ui"):
+        return "shared-ui"
     kind = artifact.get("kind")
     if kind == "resource":
         return "ui"
     if kind in {"database-schema", "database-migration", "network-schema", "serialization-schema"}:
         return "data"
     return "platform"
+
+
+def feature_module(path: object, feature_root: str) -> tuple[str, str] | None:
+    if not isinstance(path, str):
+        return None
+    parts = [part for part in path.split(":") if part]
+    feature_root_parts = [
+        part for part in feature_root.replace("/", ":").split(":") if part
+    ]
+    if (
+        len(parts) < len(feature_root_parts) + 1
+        or parts[:len(feature_root_parts)] != feature_root_parts
+    ):
+        return None
+    feature = parts[len(feature_root_parts)]
+    remainder = parts[len(feature_root_parts) + 1:]
+    return feature, "aggregation" if not remainder else remainder[-1]
+
+
+def module_role(path: object, feature_root: str) -> str | None:
+    feature = feature_module(path, feature_root)
+    if feature:
+        return feature[1]
+    if not isinstance(path, str):
+        return None
+    parts = [part.lower() for part in path.split(":") if part]
+    if parts and parts[0] in {"test", "test-support", "fixtures"}:
+        return "test-support"
+    last = parts[-1] if parts else ""
+    if last in {"app", "androidapp", "composeapp", "application"}:
+        return "app"
+    return last
+
+
+def shared_ui_edge_violation(
+    source_path: object,
+    target_path: object,
+    feature_root: str,
+) -> tuple[str, str] | None:
+    source = feature_module(source_path, feature_root)
+    target = feature_module(target_path, feature_root)
+    source_role = module_role(source_path, feature_root)
+    target_role = module_role(target_path, feature_root)
+    if target_role == "shared-ui":
+        if source_role == "shared-ui":
+            return "shared-ui-to-shared-ui", "Shared UI must not depend on shared UI."
+        if source_role in {"domain", "data", "navigation"}:
+            return (
+                "lower-layer-to-shared-ui",
+                f"{source_role} must not depend on feature shared UI.",
+            )
+        if source_role == "aggregation":
+            if source and target and source[0] == target[0]:
+                return None
+            return (
+                "feature-root-to-foreign-shared-ui",
+                "A feature root may aggregate only its own shared UI.",
+            )
+        if source_role == "ui" and source:
+            return None
+        return (
+            "invalid-shared-ui-consumer",
+            "Feature shared UI may be consumed only by its owner root or feature UI.",
+        )
+    if source_role != "shared-ui":
+        return None
+    if target_role in {"data", "app", "test", "test-support"}:
+        return (
+            "shared-ui-to-forbidden-layer",
+            f"Shared UI must not depend on {target_role}.",
+        )
+    if target and target_role in {"ui", "aggregation"}:
+        return (
+            "shared-ui-to-feature-ui"
+            if target_role == "ui"
+            else "shared-ui-to-feature-root",
+            f"Shared UI must not depend on a feature {target_role}.",
+        )
+    if (
+        source
+        and target
+        and source[0] != target[0]
+        and target_role in {"domain", "navigation"}
+    ):
+        return (
+            "shared-ui-to-foreign-feature-contract",
+            "Shared UI may depend only on its owner's feature contracts.",
+        )
+    return None
 
 
 def build_plan(audit: dict, overrides: dict) -> dict:
@@ -233,12 +351,18 @@ def build_plan(audit: dict, overrides: dict) -> dict:
         if len(module_parts) > len(feature_root_parts) and module_parts[:len(feature_root_parts)] == feature_root_parts:
             existing_modules_by_feature[module_parts[len(feature_root_parts)]].append(module["path"])
 
+    feature_overrides = {
+        feature["name"]: feature for feature in overrides.get("features", [])
+    }
     features = []
     for name in sorted(set(grouped) | set(existing_modules_by_feature)):
         assignments = grouped.get(name, [])
         counts = collections.Counter(a["layer"] for a in assignments)
         low_confidence = sum(a["confidence"] in {"low", "medium"} for a in assignments)
-        configured_layers = overrides.get("target_feature_layers")
+        configured_layers = feature_overrides.get(name, {}).get(
+            "target_layers",
+            overrides.get("target_feature_layers"),
+        )
         selected_layers = [layer for layer in PRODUCTION_LAYERS if counts[layer]]
         if configured_layers:
             selected_layers = [layer for layer in configured_layers if layer in PRODUCTION_LAYERS]
@@ -263,7 +387,72 @@ def build_plan(audit: dict, overrides: dict) -> dict:
 
     eligible = [f for f in features if f["file_count"] >= 5 and len([x for x in PRODUCTION_LAYERS if f["layer_counts"].get(x)]) >= 2]
     pilot = min(eligible, key=lambda item: item["pilot_score"])["name"] if eligible else (features[0]["name"] if features else None)
-    module_order = ["domain", "test", "data", "navigation", "ui", "aggregation"]
+    module_order = ["domain", "test", "data", "navigation", "shared-ui", "ui", "aggregation"]
+    observed_shared_ui_dependencies = []
+    shared_ui_violations = []
+    for module in audit.get("modules", []):
+        consumer = module.get("path")
+        for provider in module.get("project_dependencies", []):
+            violation = shared_ui_edge_violation(consumer, provider, feature_root)
+            if violation:
+                shared_ui_violations.append({
+                    "source": consumer,
+                    "target": provider,
+                    "rule": violation[0],
+                    "evidence": violation[1],
+                })
+            elif (
+                feature_module(consumer, feature_root)
+                and module_role(consumer, feature_root) == "ui"
+                and module_role(provider, feature_root) == "shared-ui"
+            ):
+                observed_shared_ui_dependencies.append({
+                    "consumer": consumer,
+                    "provider": provider,
+                    "source": "observed Gradle dependency",
+                })
+    explicit_shared_ui_dependencies = [
+        {**edge, "source": "approved override"}
+        for edge in overrides.get("shared_ui_dependencies", [])
+    ]
+    shared_ui_dependencies = []
+    seen_shared_ui_dependencies = set()
+    for edge in [*observed_shared_ui_dependencies, *explicit_shared_ui_dependencies]:
+        key = (edge["consumer"], edge["provider"])
+        if key in seen_shared_ui_dependencies:
+            continue
+        seen_shared_ui_dependencies.add(key)
+        shared_ui_dependencies.append(edge)
+    planned_modules = {
+        module
+        for feature in features
+        for module in feature["target_modules"]
+    }
+    for edge in shared_ui_dependencies:
+        missing = [
+            endpoint
+            for endpoint in (edge["consumer"], edge["provider"])
+            if endpoint not in planned_modules
+        ]
+        if missing:
+            shared_ui_violations.append({
+                "source": edge["consumer"],
+                "target": edge["provider"],
+                "rule": "unplanned-shared-ui-endpoint",
+                "evidence": (
+                    "Shared-UI dependency references module(s) absent from the plan: "
+                    + ", ".join(missing)
+                ),
+            })
+    deduplicated_shared_ui_violations = []
+    seen_shared_ui_violations = set()
+    for item in shared_ui_violations:
+        key = (item["source"], item["target"], item["rule"], item["evidence"])
+        if key in seen_shared_ui_violations:
+            continue
+        seen_shared_ui_violations.add(key)
+        deduplicated_shared_ui_violations.append(item)
+    shared_ui_violations = deduplicated_shared_ui_violations
     feature_assignment_count = sum(len(feature["assignments"]) for feature in features)
     accounted_count = feature_assignment_count + len(shared_assignments) + len(retained_assignments) + len(unresolved)
     source_count = len(audit.get("sources", []))
@@ -280,6 +469,11 @@ def build_plan(audit: dict, overrides: dict) -> dict:
         "feature_root": feature_root,
         "recommended_pilot": pilot,
         "migration_layer_order": module_order,
+        "shared_ui_dependencies": shared_ui_dependencies,
+        "shared_ui_violations": shared_ui_violations,
+        "plan_acceptance": {
+            "shared_ui_graph": "fail" if shared_ui_violations else "pass",
+        },
         "features": features,
         "shared_assignments": shared_assignments,
         "retained_assignments": retained_assignments,
@@ -347,6 +541,26 @@ def markdown(plan: dict) -> str:
         for module in feature["target_modules"]:
             lines.append(f"- `{module}`")
         lines.append("")
+    lines += ["## Shared-UI dependency order", ""]
+    if plan["shared_ui_dependencies"]:
+        for edge in plan["shared_ui_dependencies"]:
+            lines.append(
+                f"- `{edge['consumer']}` depends on `{edge['provider']}` "
+                f"({edge['source']})"
+            )
+    else:
+        lines.append("No shared-UI consumer/provider edges approved or observed.")
+    lines.append("")
+    lines += ["## Shared-UI dependency violations", ""]
+    if plan["shared_ui_violations"]:
+        for item in plan["shared_ui_violations"]:
+            lines.append(
+                f"- **REJECT** `{item['source']}` → `{item['target']}` "
+                f"(`{item['rule']}`): {item['evidence']}"
+            )
+    else:
+        lines.append("None. Shared-UI dependency graph gate passed.")
+    lines.append("")
     lines += ["## Shared assignments", ""]
     if plan["shared_assignments"]:
         for item in plan["shared_assignments"]:

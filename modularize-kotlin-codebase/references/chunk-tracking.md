@@ -24,6 +24,7 @@ A chunk must have one reviewable architectural purpose and a verification bounda
 - convert one representative module to conventions;
 - migrate one feature’s domain plus its tests;
 - migrate one feature’s data layer plus repository tests;
+- migrate and verify one provider feature’s shared UI before consumer UI;
 - register one feature in DI/navigation/app aggregation;
 - remove one named compatibility adapter;
 - run full-slice verification.
@@ -31,6 +32,14 @@ A chunk must have one reviewable architectural purpose and a verification bounda
 Generate global shared-test or core/utility foundation chunks only when the reviewed plan names those targets. An empty `shared_foundation_modules` list means no shared-test-foundation chunk; ordinary feature-layer tests still belong to their owning modules. Do not make every feature depend on a speculative global foundation.
 
 Split a chunk when it cannot be verified independently, mixes unrelated features, or leaves the repository in an unexplained non-compiling state. Do not create one chunk per file unless files truly have independent ownership and verification.
+
+Represent each reviewed `consumer ui -> provider shared-ui` edge in the plan.
+The tracker adds the provider shared-UI chunk as a dependency of the consumer UI
+chunk even when feature ordering would otherwise place the consumer first.
+Once a plan contains any shared-UI metadata, ledger initialization requires
+`plan_acceptance.shared_ui_graph` to be explicitly `pass` and
+`shared_ui_violations` to be empty; resolve architecture findings instead of
+bypassing the gate. Legacy plans with no shared-UI metadata remain readable.
 
 For a partially modularized repository, retain chunks for existing target modules but label them as validation/migration work. A directory or build file is not proof that the module is complete: verify conventions, registration, boundaries, source/artifact ownership, and tests before completing its chunk. Do not auto-complete historical structure from static discovery.
 

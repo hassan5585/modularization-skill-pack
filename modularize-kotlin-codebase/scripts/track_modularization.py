@@ -150,6 +150,27 @@ def repository_snapshot(root: Path) -> dict:
 
 
 def feature_chunks(plan: dict) -> list[dict]:
+    plan_acceptance = plan.get("plan_acceptance", {})
+    if not isinstance(plan_acceptance, dict):
+        raise ValueError("plan_acceptance must be an object")
+    shared_ui_gate = plan_acceptance.get("shared_ui_graph")
+    shared_ui_violations = plan.get("shared_ui_violations", [])
+    if not isinstance(shared_ui_violations, list):
+        raise ValueError("shared_ui_violations must be a list")
+    shared_ui_dependencies = plan.get("shared_ui_dependencies", [])
+    if not isinstance(shared_ui_dependencies, list):
+        raise ValueError("shared_ui_dependencies must be a list")
+    has_shared_ui_metadata = (
+        "shared_ui_dependencies" in plan
+        or "shared_ui_violations" in plan
+        or "shared_ui_graph" in plan_acceptance
+    )
+    if (has_shared_ui_metadata and shared_ui_gate != "pass") or shared_ui_violations:
+        raise ValueError(
+            "plan cannot initialize while the shared-UI dependency graph gate "
+            f"is {shared_ui_gate or 'unset'} with "
+            f"{len(shared_ui_violations)} violation(s)"
+        )
     chunks: list[dict] = [
         chunk("baseline", "baseline", "Capture repository baseline", [], ["Build and test baseline is recorded with pre-existing failures separated."]),
         chunk("conventions", "build-conventions", "Create and prove convention plugins", ["baseline"], ["Build logic compiles.", "At least one representative production module uses the conventions without task, target, source-set, dependency, resource, or test regressions."]),
@@ -170,6 +191,7 @@ def feature_chunks(plan: dict) -> list[dict]:
     has_foundations = any(item["id"] == "foundations" for item in chunks)
     feature_done: list[str] = []
     used_feature_ids: set[str] = set()
+    all_module_chunks: dict[str, str] = {}
     for feature in plan.get("features", []):
         name = feature.get("name")
         if not isinstance(name, str):
@@ -193,6 +215,7 @@ def feature_chunks(plan: dict) -> list[dict]:
             ("test-support", "Create feature test support when reuse requires it"),
             ("data", "Migrate data implementations and persistence/network ownership"),
             ("navigation", "Migrate stable navigation contracts"),
+            ("shared-ui", "Migrate feature-owned reusable UI"),
             ("ui", "Migrate presentation and resources"),
             ("wiring", "Register app, DI, navigation, serialization, and platform wiring"),
             ("cleanup", "Remove legacy paths and temporary bridges"),
@@ -203,7 +226,7 @@ def feature_chunks(plan: dict) -> list[dict]:
                 continue
             chunk_id = f"feature-{feature_id}-{layer}"
             dependencies = [previous]
-            if has_test_foundations and layer in {"data", "navigation", "ui"}:
+            if has_test_foundations and layer in {"data", "navigation", "shared-ui", "ui"}:
                 dependencies.append("test-foundations")
             reviewed_title = title
             if module_layer in existing_layers:
@@ -220,8 +243,53 @@ def feature_chunks(plan: dict) -> list[dict]:
                     else "New module structure is registered, convention-driven, and verified before dependent layers move.",
                 ],
             ))
+            for target_module in target_modules:
+                if (
+                    isinstance(target_module, str)
+                    and target_module.split(":")[-1] == module_layer
+                ):
+                    all_module_chunks[target_module] = chunk_id
             previous = chunk_id
         feature_done.append(previous)
+    chunks_by_id = {item["id"]: item for item in chunks}
+    feature_root_parts = [
+        part
+        for part in str(plan.get("feature_root", "feature")).replace("/", ":").split(":")
+        if part
+    ]
+
+    def feature_layer(path: object) -> str | None:
+        if not isinstance(path, str):
+            return None
+        parts = [part for part in path.split(":") if part]
+        if (
+            len(parts) != len(feature_root_parts) + 2
+            or parts[:len(feature_root_parts)] != feature_root_parts
+        ):
+            return None
+        return parts[-1]
+
+    for edge in shared_ui_dependencies:
+        if not isinstance(edge, dict):
+            raise ValueError("shared_ui_dependencies entries must be objects")
+        consumer = edge.get("consumer")
+        provider = edge.get("provider")
+
+        if feature_layer(consumer) != "ui" or feature_layer(provider) != "shared-ui":
+            raise ValueError(
+                "shared_ui_dependencies require a consumer feature ui module "
+                "and provider feature shared-ui module"
+            )
+        consumer_chunk = all_module_chunks.get(consumer)
+        provider_chunk = all_module_chunks.get(provider)
+        if not consumer_chunk or not provider_chunk:
+            raise ValueError(
+                "shared_ui_dependencies must reference planned consumer ui and provider shared-ui modules"
+            )
+        chunks_by_id[consumer_chunk]["depends_on"] = list(dict.fromkeys([
+            *chunks_by_id[consumer_chunk]["depends_on"],
+            provider_chunk,
+        ]))
     final_dependencies = list(dict.fromkeys([
         *(["test-foundations"] if has_test_foundations else []),
         *(["foundations"] if has_foundations else []),

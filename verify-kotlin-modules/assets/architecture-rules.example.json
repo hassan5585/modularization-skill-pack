@@ -12,19 +12,24 @@
     "*/domain": "domain",
     "*/data": "data",
     "*/navigation": "navigation",
+    "*/shared-ui": "shared-ui",
     "*/ui": "ui",
     "*/test": "test-support"
   },
   "forbidden_target_roles": {
-    "domain": ["data", "navigation", "ui", "app", "test-support"],
-    "data": ["navigation", "ui", "app", "test-support"],
-    "navigation": ["data", "ui", "app", "test-support"],
+    "domain": ["data", "navigation", "shared-ui", "ui", "app", "test-support"],
+    "data": ["navigation", "shared-ui", "ui", "app", "test-support"],
+    "navigation": ["data", "shared-ui", "ui", "app", "test-support"],
+    "shared-ui": ["data", "shared-ui", "app", "test-support"],
     "ui": ["data", "app", "test-support"],
     "aggregation": ["test-support"]
   },
   "cross_feature": {
-    "severity": "warning",
-    "allowed_target_roles": ["domain", "navigation"]
+    "severity": "error",
+    "allowed_target_roles": ["domain", "navigation"],
+    "allowed_role_edges": {
+      "ui": ["shared-ui"]
+    }
   },
   "direct_project_imports": {
     "severity": null
@@ -43,6 +48,7 @@
       "domain": {"any_of": ["example.feature.domain", "com.example.convention.feature.domain"], "all_of": []},
       "data": {"any_of": ["example.feature.data", "com.example.convention.feature.data"], "all_of": []},
       "navigation": {"any_of": ["example.feature.navigation", "com.example.convention.feature.navigation"], "all_of": []},
+      "shared-ui": {"any_of": ["example.feature.ui", "com.example.convention.feature.ui"], "all_of": []},
       "ui": {"any_of": ["example.feature.ui", "com.example.convention.feature.ui"], "all_of": []},
       "test-support": {"any_of": ["example.test.support", "com.example.convention.test.support"], "all_of": []}
     },

@@ -1,6 +1,6 @@
 ---
 name: modularize-kotlin-codebase
-description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, dependency-boundary cleanup, KMP/Android/JVM module planning, convention-plugin extraction, or coordinating the sibling audit, Gradle-convention, feature-migration, and verification skills.
+description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency-boundary cleanup, KMP/Android/JVM module planning, convention-plugin extraction, or coordinating the sibling audit, Gradle-convention, feature-migration, and verification skills.
 ---
 
 # Modularize Kotlin Codebase
@@ -38,6 +38,7 @@ Preserve these invariants unless the user explicitly changes them:
 - A data layer implements domain ports and owns DTOs, mappers, persistence, network, and cache implementations.
 - A navigation layer owns route/destination contracts and graph wiring appropriate to the project’s navigation library.
 - A UI layer owns presentation state, screens, controllers/ViewModels/presenters, resources, and UI-only formatters.
+- An optional feature `shared-ui` owns provider-specific UI reused by feature UI modules. It uses normal UI internals, sits below consumers, and never depends on another shared-UI module.
 - A test-support module contains reusable fakes, fixtures, and test builders; it is never on a production runtime path.
 - Cross-feature sharing moves only after a second real consumer appears or a stable product concept is clearly app-wide.
 
@@ -73,7 +74,12 @@ Do not proceed with ambiguous boundaries that would materially change the target
 
 Do not begin structural edits until every production/test source is assigned to a feature, core/utility/app-shell target, intentionally retained, generated/excluded, or listed in the unresolved queue with an owner.
 
-After the plan is reviewed, initialize `.modularization/work-state.json` and `.modularization/worklog.md` with `scripts/track_modularization.py init --plan ... --config ...`. Keep these files in the target repository. Review the generated dependency graph and add/split chunks before the first structural edit.
+After the plan is reviewed, require its shared-UI graph gate to pass, then
+initialize `.modularization/work-state.json` and `.modularization/worklog.md`
+with `scripts/track_modularization.py init --plan ... --config ...`. The tracker
+refuses a failed gate or nonempty `shared_ui_violations`. Keep these files in
+the target repository. Review the generated dependency graph and add/split
+chunks before the first structural edit.
 
 ## Phase 2: Design convention plugins
 
@@ -101,6 +107,7 @@ Introduce only foundations required by the first feature:
 - `core:data` for shared infrastructure rather than feature repositories;
 - `core:navigation` for navigation abstractions and shared route contracts;
 - `core:ui` for the design system and presentation foundations;
+- `feature:<name>:shared-ui` only for reviewed feature-owned reuse; keep generic design-system primitives in `core:ui`;
 - `util:<capability>:domain` plus `real` and optional `ui` for independently reusable cross-cutting services.
 - a repository-wide test-foundation module for production-independent helpers, plus a downstream-safe core-contract fake module when multiple features need it;
 - feature/utility `test` support modules only when fakes or fixtures have multiple owning-test consumers and the dependency direction is acyclic.
@@ -117,9 +124,10 @@ Invoke `$migrate-kotlin-feature` and migrate dependency-first:
 2. Test fakes/fixtures needed by domain consumers.
 3. Data implementations and mappers.
 4. Navigation contracts and adapters.
-5. UI and presentation state.
-6. DI registration, app aggregation, and entry-point wiring.
-7. Old code deletion only after all references have moved and checks pass.
+5. Optional provider-owned shared UI, verified before every consuming feature UI.
+6. UI and presentation state.
+7. DI registration, app aggregation, and entry-point wiring.
+8. Old code deletion only after all references have moved and checks pass.
 
 Before each numbered batch, start its ledger chunk. After the batch, record exact command results, changed paths, decisions, risks, and adapters, then complete the chunk. Keep only one chunk `in_progress`.
 
@@ -134,8 +142,9 @@ After the pilot passes verification:
 3. Run layer-local tests, dependent-module tests, and an app compile after each batch.
 4. Re-run architecture checks after every feature.
 5. Promote shared code only when evidence shows stable reuse.
-6. Keep a remaining-files queue; every monolith file must be assigned, intentionally retained, or deleted.
-7. Resume from the ledger rather than repeating completed discovery or moves. Revalidate the repository head and dirty baseline before resuming a blocked or interrupted chunk.
+6. Keep shared-UI provider chunks before consumer UI chunks; never create shared-UI chains.
+7. Keep a remaining-files queue; every monolith file must be assigned, intentionally retained, or deleted.
+8. Resume from the ledger rather than repeating completed discovery or moves. Revalidate the repository head and dirty baseline before resuming a blocked or interrupted chunk.
 
 Avoid horizontal big-bang moves such as extracting every model before any feature works end-to-end.
 
@@ -146,6 +155,7 @@ Invoke `$verify-kotlin-modules` for the full repository.
 Completion requires:
 
 - no forbidden module or source import edges;
+- no shared-UI-to-shared-UI or shared-UI-to-feature-UI edges;
 - no dependency cycles;
 - no production dependency on test-support modules;
 - settings, app aggregation, DI, navigation, and generated-code registration are complete;

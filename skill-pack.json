@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "portable-kotlin-modularization",
-  "description": "Skills and standard-library scripts for incrementally splitting Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle monoliths into layered feature, core, utility, and test-support modules with project-specific convention plugins, resumable repository tracking, and architecture verification.",
+  "description": "Skills and standard-library scripts for incrementally splitting Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle monoliths into layered feature, optional feature-owned shared-ui, core, utility, and test-support modules with project-specific convention plugins, resumable repository tracking, and architecture verification.",
   "skills": [
     "modularize-kotlin-codebase",
     "audit-kotlin-architecture",

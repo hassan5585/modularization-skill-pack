@@ -1,4 +1,4 @@
 interface:
   display_name: "Migrate Kotlin Feature"
   short_description: "Move one feature into layered modules safely"
-  default_prompt: "Use $migrate-kotlin-feature to migrate one vertical feature slice into domain, data, navigation, UI, and test modules."
+  default_prompt: "Use $migrate-kotlin-feature to migrate one vertical feature slice into domain, data, navigation, UI, optional shared-UI, and test modules."

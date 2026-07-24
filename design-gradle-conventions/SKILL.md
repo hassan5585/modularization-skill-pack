@@ -1,6 +1,6 @@
 ---
 name: design-gradle-conventions
-description: Analyze repeated Gradle configuration and create or refine project-specific convention plugins for Kotlin Multiplatform, Android, JVM, feature-layer, core, utility, and test-support modules. Use when extracting build logic from duplicated build.gradle(.kts) files, defining plugins applied to domain/data/navigation/UI/test modules, adopting an included build or build-logic project, or making new modularized modules reuse the target codebase’s existing libraries and versions.
+description: Analyze repeated Gradle configuration and create or refine project-specific convention plugins for Kotlin Multiplatform, Android, JVM, feature-layer, core, utility, and test-support modules. Use when extracting build logic from duplicated build.gradle(.kts) files, defining plugins applied to domain/data/navigation/UI/optional shared-UI/test modules, adopting an included build or build-logic project, or making new modularized modules reuse the target codebase’s existing libraries and versions.
 ---
 
 # Design Gradle Conventions
@@ -85,6 +85,7 @@ Do not call convention design complete after merely generating plugin classes. T
 - **Data:** add the project’s network/persistence/serialization/code-generation capabilities, but not UI or navigation UI.
 - **Navigation:** add only route serialization and the detected navigation contracts/runtime required for declarations.
 - **UI:** add the detected UI toolkit, resource pipeline, lifecycle/presentation, navigation UI, previews, and UI tests when used.
+- **Shared UI:** reuse the regular UI convention and capabilities. Treat `shared-ui` as a dependency role, not a reason to create a second UI convention plugin.
 - **Test support:** add test libraries and downstream-safe contracts; never make production aggregators depend on it.
 - **Owning-module tests:** configure the project’s real unit-test source sets/tasks and portable base libraries, then attach required tests to the normal verification lifecycle. Keep this distinct from the test-support library convention.
 - **Aggregation root:** expose or implement child modules and register DI/entry points; avoid owning feature behavior.

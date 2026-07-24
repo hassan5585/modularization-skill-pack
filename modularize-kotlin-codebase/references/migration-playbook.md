@@ -68,10 +68,11 @@ Keep commits or logical batches compilable:
 3. Move domain types and tests; compile.
 4. Move data ports/implementations and tests; compile.
 5. Move navigation contracts; compile navigation and dependents.
-6. Move UI/resources; compile UI and app.
-7. Rewire DI and app aggregation.
-8. Remove old code and compatibility adapters.
-9. Run broad verification.
+6. Move an approved provider `shared-ui`; compile/test it and every consumer UI.
+7. Move UI/resources; compile UI and app.
+8. Rewire DI and app aggregation.
+9. Remove old code and compatibility adapters.
+10. Run broad verification.
 
 Map these batches into the repository ledger. A conversation checklist is not a durable checkpoint.
 
@@ -115,6 +116,7 @@ A feature migration is done when:
 - old packages and duplicate implementations are gone;
 - compatibility adapters are removed or explicitly scheduled;
 - no forbidden dependency/import edges exist;
+- no direct cross-feature regular-UI edge or shared-UI chain exists;
 - changed-layer and app checks pass;
 - documentation reflects the new owner and entry points.
 

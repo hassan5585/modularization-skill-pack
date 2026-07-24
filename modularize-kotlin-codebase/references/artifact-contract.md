@@ -36,10 +36,48 @@ Do not hand-edit generated audit fields. Put corrections in an overrides file.
 - unresolved files;
 - proposed shared/core/utility candidates;
 - explicitly approved `foundation_modules` and shared test-foundation modules (empty means no global foundation chunk);
+- explicit shared-UI consumer/provider module edges used for migration ordering;
+- shared-UI graph violations and the non-waivable plan-acceptance gate;
 - dependency risks;
 - pilot recommendation and migration sequence.
 
 The plan becomes approved only after an agent or user reviews ambiguous assignments.
+
+Shared-UI planning fields have this concrete shape:
+
+```json
+{
+  "shared_ui_dependencies": [
+    {
+      "consumer": ":feature:checkout:ui",
+      "provider": ":feature:orders:shared-ui",
+      "source": "approved override"
+    }
+  ],
+  "shared_ui_violations": [
+    {
+      "source": ":feature:orders:shared-ui",
+      "target": ":feature:profile:shared-ui",
+      "rule": "shared-ui-to-shared-ui",
+      "evidence": "Shared UI must not depend on shared UI."
+    }
+  ],
+  "plan_acceptance": {
+    "shared_ui_graph": "fail"
+  }
+}
+```
+
+Every override edge uses exactly `consumer` and `provider`; generated plan
+edges add `source` to distinguish observed Gradle dependencies from approved
+overrides. The consumer must be
+an absolute feature `:ui` path and the provider an absolute feature
+`:shared-ui` path; both endpoints must be present in the plan. The planner
+combines reviewed overrides with observed Gradle edges. It emits
+`shared_ui_violations` for illegal direction, unsupported consumers, missing
+endpoints, or forbidden provider dependencies, and sets
+`plan_acceptance.shared_ui_graph` to `pass` only when that list is empty. The
+work tracker refuses to initialize unless this gate passes.
 
 ## Move manifests
 

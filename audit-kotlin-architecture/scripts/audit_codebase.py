@@ -25,7 +25,7 @@ DEFAULT_EXCLUDES = {
 }
 TECHNICAL_SEGMENTS = {
     "app", "application", "common", "shared", "core", "base", "feature", "features",
-    "domain", "data", "ui", "presentation", "navigation", "nav", "di", "util", "utils",
+    "domain", "data", "ui", "shared-ui", "sharedui", "presentation", "navigation", "nav", "di", "util", "utils",
     "model", "models", "repository", "repositories", "impl", "internal", "platform",
     "plugin", "plugins", "test", "tests",
 }
@@ -34,7 +34,7 @@ IMPORT_RE = re.compile(r"(?m)^\s*import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\.\
 PROJECT_DEP_RES = [
     re.compile(r"project\(\s*[\"'](:[^\"']+)[\"']\s*\)"),
     re.compile(r"project\(\s*path\s*[:=]\s*[\"'](:[^\"']+)[\"']"),
-    re.compile(r"\bprojects\.([A-Za-z0-9_.]+)"),
+    re.compile(r"(?<![A-Za-z0-9_.])projects\.([A-Za-z0-9_.]+)"),
 ]
 PLUGIN_PATTERNS = [
     re.compile(r"alias\(\s*libs\.plugins\.([A-Za-z0-9_.-]+)\s*\)"),
@@ -43,6 +43,105 @@ PLUGIN_PATTERNS = [
     re.compile(r"apply\s+plugin\s*:\s*[\"']([^\"']+)[\"']"),
     re.compile(r"kotlin\(\s*[\"']([^\"']+)[\"']\s*\)"),
 ]
+
+
+def gradle_accessor_segment(segment: str) -> str:
+    parts = re.split(r"[-_]+", segment)
+    return parts[0] + "".join(
+        part[:1].upper() + part[1:] for part in parts[1:]
+    )
+
+
+def gradle_project_accessor(module: str) -> str:
+    return ".".join(
+        gradle_accessor_segment(segment)
+        for segment in module.split(":")
+        if segment
+    )
+
+
+def strip_gradle_comments(text: str) -> str:
+    result: list[str] = []
+    index = 0
+    quote: str | None = None
+    triple_quoted = False
+    block_depth = 0
+    while index < len(text):
+        if block_depth and text.startswith("/*", index):
+            block_depth += 1
+            result.append("  ")
+            index += 2
+        elif block_depth and text.startswith("*/", index):
+            block_depth -= 1
+            result.append("  ")
+            index += 2
+        elif block_depth:
+            result.append("\n" if text[index] == "\n" else " ")
+            index += 1
+        elif quote and triple_quoted:
+            delimiter = quote * 3
+            if text.startswith(delimiter, index):
+                result.append(delimiter)
+                index += 3
+                quote = None
+                triple_quoted = False
+            else:
+                result.append(text[index])
+                index += 1
+        elif quote:
+            character = text[index]
+            result.append(character)
+            index += 1
+            if character == "\\" and index < len(text):
+                result.append(text[index])
+                index += 1
+            elif character == quote:
+                quote = None
+        elif text.startswith("//", index):
+            while index < len(text) and text[index] != "\n":
+                index += 1
+        elif text.startswith("/*", index):
+            block_depth = 1
+            result.append("  ")
+            index += 2
+        elif text[index] in {'"', "'"}:
+            quote = text[index]
+            triple_quoted = text.startswith(quote * 3, index)
+            result.append(quote * 3 if triple_quoted else quote)
+            index += 3 if triple_quoted else 1
+        else:
+            result.append(text[index])
+            index += 1
+    return "".join(result)
+
+
+def normalize_project_dependency(
+    value: str,
+    known_modules: set[str] | None = None,
+) -> str:
+    if value.startswith(":"):
+        return value
+    if known_modules:
+        accessor_matches = [
+            module
+            for module in known_modules
+            if gradle_project_accessor(module) == value
+        ]
+        if len(accessor_matches) == 1:
+            return accessor_matches[0]
+    segments = value.split(".")
+    literal = ":" + ":".join(segments)
+    kebab = ":" + ":".join(
+        re.sub(r"(?<!^)(?=[A-Z])", "-", segment).lower()
+        for segment in segments
+    )
+    if known_modules:
+        for candidate in (literal, kebab):
+            if candidate in known_modules:
+                return candidate
+    return kebab if "sharedUi" in segments else literal
+
+
 DEPENDENCY_CALL_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s*\(\s*(.+?)\s*\)\s*$")
 DEPENDENCY_GROOVY_RE = re.compile(r"(?m)^\s*([A-Za-z][A-Za-z0-9.]*)\s+([^={}].+?)\s*$")
 DEPENDENCY_SUFFIXES = ("implementation", "api", "compileonly", "runtimeonly", "processor", "kapt", "ksp")
@@ -115,6 +214,7 @@ def included_build_roots(root: Path) -> set[Path]:
     if not settings:
         return set()
     text, _ = read_text(settings)
+    text = strip_gradle_comments(text)
     result = set()
     for relative in INCLUDE_BUILD_RE.findall(text):
         candidate = (root / relative).resolve()
@@ -150,7 +250,10 @@ def read_text(path: Path) -> tuple[str, str | None]:
         return "", str(exc)
 
 
-def project_dependencies(text: str) -> tuple[list[str], list[str]]:
+def project_dependencies(
+    text: str,
+    known_modules: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
     matches = sorted(
         ((match.start(), match.group(1)) for regex in PROJECT_DEP_RES for match in regex.finditer(text)),
         key=lambda item: item[0],
@@ -158,8 +261,7 @@ def project_dependencies(text: str) -> tuple[list[str], list[str]]:
     production: set[str] = set()
     tests: set[str] = set()
     for position, dependency in matches:
-        if not dependency.startswith(":"):
-            dependency = ":" + dependency.replace(".", ":")
+        dependency = normalize_project_dependency(dependency, known_modules)
         stack: list[str] = []
         last_boundary = 0
         for index, char in enumerate(text[:position]):
@@ -190,7 +292,10 @@ def plugin_ids(text: str) -> list[str]:
     return sorted(plugins)
 
 
-def declared_dependencies(text: str) -> list[dict]:
+def declared_dependencies(
+    text: str,
+    known_modules: set[str] | None = None,
+) -> list[dict]:
     values: set[tuple[str, str]] = set()
     for pattern in (DEPENDENCY_CALL_RE, DEPENDENCY_GROOVY_RE):
         for match in pattern.finditer(text):
@@ -202,9 +307,7 @@ def declared_dependencies(text: str) -> list[dict]:
             catalog = re.search(r"\blibs\.([A-Za-z0-9_.-]+)", expression)
             project = next((regex.search(expression) for regex in PROJECT_DEP_RES if regex.search(expression)), None)
             if project:
-                value = project.group(1)
-                if not value.startswith(":"):
-                    value = ":" + value.replace(".", ":")
+                value = normalize_project_dependency(project.group(1), known_modules)
             elif catalog:
                 value = "libs." + catalog.group(1)
             elif quoted:
@@ -435,6 +538,7 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
     all_files = list(walk_files(root, excludes))
     build_files = sorted(p for p in all_files if p.name in {"build.gradle", "build.gradle.kts"})
     module_dirs = {p.parent: module_path_for(p, root) for p in build_files}
+    known_modules = set(module_dirs.values())
     parse_warnings: list[dict] = []
 
     modules = []
@@ -442,7 +546,8 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
         text, error = read_text(build_file)
         if error:
             parse_warnings.append({"path": build_file.relative_to(root).as_posix(), "warning": error})
-        deps, test_deps = project_dependencies(text)
+        text = strip_gradle_comments(text)
+        deps, test_deps = project_dependencies(text, known_modules)
         plugins = plugin_ids(text)
         modules.append({
             "path": module_dirs[build_file.parent],
@@ -451,7 +556,7 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
             "project_dependencies": deps,
             "test_project_dependencies": test_deps,
             "plugins": plugins,
-            "declared_dependencies": declared_dependencies(text),
+            "declared_dependencies": declared_dependencies(text, known_modules),
         })
 
     source_paths = sorted(p for p in all_files if p.suffix in {".kt", ".java"})
@@ -468,8 +573,13 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
             packages.append(package)
         imports = sorted(set(IMPORT_RE.findall(text)))
         relative_path = path.relative_to(root)
-        layer, confidence, scores = classify_layer(relative_path, text)
         module = owning_module(path, root, module_dirs)
+        layer, confidence, scores = classify_layer(relative_path, text)
+        module_role = module.split(":")[-1].lower() if module else None
+        if layer != "test" and module_role == "shared-ui":
+            layer = "shared-ui"
+            confidence = "high"
+            scores = {**scores, "shared-ui": max(scores.get("shared-ui", 0), 10)}
         test_kind = None
         test_target_layer = None
         if layer == "test":
@@ -477,12 +587,11 @@ def build_inventory(root: Path, excludes: set[str], root_package_override: str |
                 test_kind = "reusable-test-support"
             else:
                 test_kind = "owning-module-test"
-                module_role = module.split(":")[-1].lower() if module else None
-                if module_role in {"domain", "data", "navigation", "ui"}:
+                if module_role in {"domain", "data", "navigation", "shared-ui", "ui"}:
                     test_target_layer = module_role
                 else:
                     inferred_test_layer, _, _ = classify_layer(relative_path, text, detect_tests=False)
-                    test_target_layer = inferred_test_layer if inferred_test_layer in {"domain", "data", "navigation", "ui"} else None
+                    test_target_layer = inferred_test_layer if inferred_test_layer in {"domain", "data", "navigation", "shared-ui", "ui"} else None
         raw_sources.append({
             "path": rel,
             "language": path.suffix.lstrip("."),

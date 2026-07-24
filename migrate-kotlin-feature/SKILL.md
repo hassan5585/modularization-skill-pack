@@ -1,6 +1,6 @@
 ---
 name: migrate-kotlin-feature
-description: Incrementally extract one vertical product feature from a Kotlin/Gradle monolith into an aggregation module plus domain, data, navigation, UI, and reusable test-support modules while preserving the project’s existing UI, DI, networking, persistence, navigation, serialization, and testing libraries. Use for pilot feature extraction, repeated feature-by-feature migration, source moves, package rewrites, module registration, dependency rewiring, or compatibility-adapter removal.
+description: Incrementally extract one vertical product feature from a Kotlin/Gradle monolith into an aggregation module plus domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules while preserving the project’s existing UI, DI, networking, persistence, navigation, serialization, and testing libraries. Use for pilot feature extraction, repeated feature-by-feature migration, shared-UI extraction, source moves, package rewrites, module registration, dependency rewiring, or compatibility-adapter removal.
 ---
 
 # Migrate Kotlin Feature
@@ -20,7 +20,7 @@ Require or derive:
 - app, DI, navigation, resource, generated-code, and test registration points;
 - baseline and layer-local verification commands.
 
-Read [references/feature-migration-procedure.md](references/feature-migration-procedure.md) before moving code. Use [assets/feature-spec.example.json](assets/feature-spec.example.json) for feature scaffolding, [assets/test-foundations-spec.example.json](assets/test-foundations-spec.example.json) for repository-wide test foundations when required, and [assets/move-manifest.example.json](assets/move-manifest.example.json) for controlled moves.
+Read [references/feature-migration-procedure.md](references/feature-migration-procedure.md) before moving code. Use [assets/feature-spec.example.json](assets/feature-spec.example.json) for the base feature shape or [assets/feature-spec-with-shared-ui.example.json](assets/feature-spec-with-shared-ui.example.json) when reviewed reuse requires an optional provider module. Use [assets/test-foundations-spec.example.json](assets/test-foundations-spec.example.json) for repository-wide test foundations when required, and [assets/move-manifest.example.json](assets/move-manifest.example.json) for controlled moves.
 
 If repository-independent helpers or core-contract fakes already have multiple consumers, scaffold their explicit modules before feature migration:
 
@@ -45,7 +45,14 @@ Review every build file and dependency, then apply:
 python3 scripts/scaffold_feature.py --root /path/to/repo --spec /path/to/feature-spec.json --apply
 ```
 
-The script creates module build files and source roots but does not edit `settings.gradle*`, app aggregation, DI, or navigation. Apply those edits deliberately because their syntax is project-specific. Put feature test-support dependencies in each layer’s `test_dependencies`; the scaffold renders them into `commonTest` for KMP or expects explicit `testImplementation`-style expressions for Android/JVM.
+The script creates module build files and source roots but does not edit
+`settings.gradle*`, app aggregation, DI, or navigation. Apply those edits
+deliberately because their syntax is project-specific. It maps the Gradle
+`shared-ui` name to a valid Kotlin package suffix such as `sharedui` and rejects
+obvious shared-UI dependency inversions. Put feature test-support dependencies
+in each layer’s `test_dependencies`; the scaffold renders them into `commonTest`
+for KMP or expects explicit `testImplementation`-style expressions for
+Android/JVM.
 
 ## Migration order
 
@@ -71,17 +78,27 @@ Move route/destination contracts, argument types allowed by the existing navigat
 
 Preserve stable route IDs, deep-link URLs, argument serialization, back-stack behavior, and external entry points.
 
-### 5. UI
+### 5. Shared UI, when approved
+
+Move the provider-owned reusable composables, UI models, formatters, resources,
+and presentation helpers needed by another feature UI. Apply the same UI
+convention as regular UI. Keep the module below all consuming UI modules and
+never depend on another feature’s contracts, `shared-ui`, or regular feature
+UI.
+
+Migrate and verify every provider shared-UI module before its consumer UI.
+
+### 6. UI
 
 Move screens, UI state, ViewModels/presenters/controllers, resources, UI models, formatters, and UI-only widgets. Keep business decisions in domain/presentation logic according to the target project’s existing architecture.
 
 Move resources with their owning UI. Check generated resource packages and imports.
 
-### 6. Aggregation and app wiring
+### 7. Aggregation and app wiring
 
 Register modules in settings, app dependencies, DI graph, navigation graph, deep links, serialization registries, generated-code configuration, and platform entry points. Keep the root aggregation module thin.
 
-### 7. Remove the old path
+### 8. Remove the old path
 
 Delete old sources only after references resolve from new modules and verification passes. Remove temporary adapters when all consumers have migrated.
 
@@ -119,8 +136,10 @@ The script changes only explicit `package` declarations. Update imports and full
 Target the following default direction, adapting only with documented project evidence:
 
 ```text
-feature root -> data + domain + navigation + ui
+feature root -> data + domain + navigation + optional shared-ui + ui
 ui           -> domain + navigation + core/ui + approved utility contracts
+ui           -> own or another feature's approved shared-ui
+shared-ui    -> owner domain + navigation + core/ui + approved utility contracts
 data         -> domain + core/data + approved utility contracts/implementations
 navigation   -> domain + core/navigation
 domain       -> core/domain + pure utility contracts
@@ -128,6 +147,9 @@ tests        -> owning module + test-support
 ```
 
 Production modules must not depend on test-support. Domain must not depend on data, navigation UI, UI, database, HTTP, or platform UI frameworks.
+Domain, data, and navigation must not depend on feature shared UI. Shared UI
+must not depend on regular feature UI, any feature root, or any other
+shared-UI module.
 
 ## Checkpoints
 
@@ -137,8 +159,9 @@ After each batch:
 2. Compile the changed module.
 3. Run its unit tests.
 4. Compile direct dependents.
-5. Run architecture verification.
-6. Compile the app or relevant deliverable.
-7. Record new failures separately from the baseline.
+5. For shared UI, compile every consuming UI after the provider.
+6. Run architecture verification.
+7. Compile the app or relevant deliverable.
+8. Record new failures separately from the baseline.
 
 The feature is complete only when no source, resource, registration, fixture, or behavior belonging to it remains accidentally in the monolith and all temporary adapters are removed or explicitly tracked.

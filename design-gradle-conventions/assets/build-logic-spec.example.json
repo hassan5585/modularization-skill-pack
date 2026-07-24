@@ -67,7 +67,7 @@
       "applies": ["com.example.convention.kotlin.library", "com.example.convention.unit.test"],
       "imports": [],
       "body": [
-        "// Configure only the target UI toolkit, resource pipeline, lifecycle, navigation UI, and test capabilities."
+        "// Configure the target UI toolkit, resources, lifecycle, navigation UI, and tests for regular UI and shared-ui modules."
       ]
     },
     {

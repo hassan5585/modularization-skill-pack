@@ -1,6 +1,6 @@
 ---
 name: verify-kotlin-modules
-description: Validate a modular Kotlin/Gradle architecture with feature aggregation modules and domain, data, navigation, UI, and test-support layers. Use after scaffolding or migrating modules, in architecture reviews, or in CI to check module shape, settings registration, project dependency direction, source-import boundaries, feature coupling, production-to-test leaks, dependency cycles, source-set placement, and appropriate Gradle verification tasks.
+description: Validate a modular Kotlin/Gradle architecture with feature aggregation modules and domain, data, navigation, UI, optional feature shared-UI, and test-support layers. Use after scaffolding or migrating modules, in architecture reviews, or in CI to check module shape, settings registration, project dependency direction, shared-UI provider/consumer rules, source-import boundaries, feature coupling, production-to-test leaks, dependency cycles, source-set placement, and appropriate Gradle verification tasks.
 ---
 
 # Verify Kotlin Modules
@@ -12,6 +12,16 @@ Use static checks as fast architecture feedback, then confirm with the target pr
 Copy [assets/architecture-rules.example.json](assets/architecture-rules.example.json) to `.modularization/architecture-rules.json` and adapt package prefixes, roots, exceptions, and severities. Read [references/rules-and-exceptions.md](references/rules-and-exceptions.md) before adding exceptions.
 
 Every exception must include a narrow source/target, reason, owner, and removal condition. Never add a wildcard exception to make a migration green.
+
+Configure `cross_feature.allowed_role_edges` when only specific role pairs may
+cross a feature boundary. For the provider-owned shared-UI pattern, allow
+`ui -> shared-ui`; do not add `shared-ui` to global `allowed_target_roles`,
+because that would permit lower layers and aggregation roots to consume it.
+The checker separately keeps provider `shared-ui` dependencies within the
+provider’s own feature contracts and rejects consumers other than feature UI
+modules or the provider’s aggregation root.
+These shared-UI boundaries are enforced for existing schema-v1 rules files as
+well; a rules file created before the pattern does not silently bypass them.
 
 Configure the approved convention included build, every required registered plugin id, and role-to-plugin requirements. Replace every `example.*` value in the asset; never run CI with placeholders. With `validate_included_build_plugins` enabled, the checker also verifies the included build's settings registration, static plugin registrations, implementation-class source files, and duplicate ids. Configure shared test modules only when the plan requires them.
 
@@ -37,6 +47,7 @@ The checker validates:
 - forbidden layer dependencies;
 - source imports that bypass the Gradle graph or point inward incorrectly;
 - cross-feature UI/data coupling;
+- legal UI-to-shared-UI consumption and hard failures for shared-UI chains or shared-UI-to-feature-UI edges;
 - production dependencies on test-support modules;
 - graph cycles;
 - global or per-feature required layers when configured;
@@ -82,6 +93,7 @@ Inspect generated outputs/tasks and run the corresponding compile or packaging c
 ## Severity policy
 
 - **Error:** forbidden direction, cycle, production-to-test dependency, missing required module, or source import that violates a hard rule.
+- **Error:** a shared-UI module depending on another shared-UI module, a regular feature UI, or a feature aggregation root.
 - **Warning:** cross-feature coupling, ambiguous ownership, unusual platform dependency, or an unconfigured module role.
 - **Info:** migration debt or suggested cleanup that does not break the architecture contract.
 

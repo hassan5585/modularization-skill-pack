@@ -36,13 +36,25 @@ Use `required_feature_layers_by_feature` for deliberately partial feature shapes
 
 Default hard constraints:
 
-- `domain` must not depend on `data`, `navigation`, `ui`, app, or test-support modules.
-- `data` must not depend on `navigation` or `ui`.
-- `navigation` must not depend on `data` or `ui`.
+- `domain` must not depend on `data`, `navigation`, `shared-ui`, `ui`, app, or test-support modules.
+- `data` must not depend on `navigation`, `shared-ui`, or `ui`.
+- `navigation` must not depend on `data`, `shared-ui`, or `ui`.
 - `ui` must not depend directly on `data` or test-support.
+- `shared-ui` may use core UI, its owner’s domain/navigation contracts, and
+  approved utility contracts. Among feature contracts, it may use only its
+  owner’s; it must not depend on feature UI, a feature root, another
+  `shared-ui`, foreign feature contracts, data, or test support.
+- A feature `shared-ui` target may be consumed only by its owner aggregation
+  root or a feature regular-UI module; app, core, util, and lower layers are not
+  consumers.
 - aggregation roots must not depend on test-support.
 - any production role must not depend on test-support.
 - project dependency cycles are errors.
+
+`forbidden_target_roles` expresses role-only restrictions. It intentionally
+does not put `ui` or `aggregation` in the `shared-ui` list because that would
+also reject legal `core:ui`; the non-suppressible shared-UI checks apply the
+feature-aware regular-UI and owner-root restrictions.
 
 The checker reports cross-feature implementation coupling as a warning unless project rules make it an error.
 
@@ -59,9 +71,37 @@ Common policies, from least to most permissive:
 1. Features communicate only through app/core contracts and navigation entries.
 2. UI may depend on another feature’s navigation/domain contract but not its UI/data.
 3. Explicit shared-feature contract modules are allowed.
-4. Direct feature UI dependencies are temporarily allowed during migration.
+4. Feature UI may consume a provider feature’s `shared-ui`, but only the
+   source/target role pair `ui -> shared-ui`.
+5. Direct feature UI dependencies are temporarily allowed during migration.
 
 Choose and encode one. Warnings left indefinitely are not an architecture policy.
+
+Encode source-sensitive edges without opening the target role globally:
+
+```json
+{
+  "cross_feature": {
+    "severity": "error",
+    "allowed_target_roles": ["domain", "navigation"],
+    "allowed_role_edges": {
+      "ui": ["shared-ui"]
+    }
+  }
+}
+```
+
+Never put `shared-ui` in `allowed_target_roles`; that would let data,
+navigation, aggregation, and other shared-UI modules consume it. The checker
+always treats `shared-ui -> shared-ui`,
+`shared-ui -> foreign feature domain/navigation`, `shared-ui -> feature ui`,
+`shared-ui -> feature root`, and unsupported consumers of `shared-ui` as errors
+that cannot be suppressed by an exception.
+
+The checker also applies the new lower-layer/shared-UI hard boundaries to older
+schema-v1 rule files that do not yet contain `shared-ui` entries. When such a
+file omits `cross_feature.allowed_role_edges.ui`, the compatible default permits
+only `ui -> shared-ui`; an explicitly configured `ui` list remains authoritative.
 
 ## 5. Exceptions
 
@@ -85,6 +125,10 @@ Requirements:
 - reason describing why the edge exists;
 - accountable owner;
 - objective removal condition.
+
+Exceptions cannot suppress the shared-UI hard-boundary rule IDs. In particular,
+`shared-ui -> shared-ui` is never an accepted migration state; compose providers
+in consumer UI or move a genuinely generic primitive to core UI.
 
 Exceptions should still appear in reports as suppressed debt. Expiry dates may be added if the team has a process that enforces them.
 

@@ -17,7 +17,12 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 PACKAGE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
-KNOWN_LAYERS = ("domain", "data", "navigation", "ui", "test")
+KNOWN_LAYERS = ("domain", "data", "navigation", "shared-ui", "ui", "test")
+PROJECT_RES = (
+    re.compile(r"project\(\s*[\"'](:[^\"']+)[\"']\s*\)"),
+    re.compile(r"project\(\s*path\s*[:=]\s*[\"'](:[^\"']+)[\"']"),
+    re.compile(r"(?<![A-Za-z0-9_.])projects\.([A-Za-z0-9_.]+)"),
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +65,9 @@ def load_spec(path: Path) -> dict:
             values = config.get(field, [])
             if not isinstance(values, list) or not all(isinstance(item, str) and item.strip() and "\n" not in item and "\r" not in item for item in values):
                 raise ValueError(f"{layer}.{field} must be a list of non-empty single-line Gradle expressions")
+        package_suffix = config.get("package_suffix")
+        if package_suffix is not None and not PACKAGE_RE.match(package_suffix):
+            raise ValueError(f"{layer}.package_suffix must contain valid Kotlin package segments")
         if layer != "test" and any(re.search(r"project\([^\n]*:test[\"']?\s*\)", value, re.IGNORECASE) for value in config.get("dependencies", [])):
             raise ValueError(f"{layer}.dependencies must not put test-support on a production source set; use test_dependencies")
     aggregation = spec.get("aggregation", {})
@@ -71,7 +79,118 @@ def load_spec(path: Path) -> dict:
             raise ValueError(f"aggregation.{field} must be a list of non-empty single-line Gradle expressions")
     if any(re.search(r"project\([^\n]*:test[\"']?\s*\)", value, re.IGNORECASE) for value in aggregation.get("dependencies", [])):
         raise ValueError("aggregation.dependencies must not include test-support modules")
+    validate_feature_dependency_edges(spec)
     return spec
+
+
+def canonical_gradle_name(value: str) -> str:
+    return re.sub(r"[-_]", "", value).lower()
+
+
+def feature_target(path: str, base_directory: str) -> tuple[str, str] | None:
+    path_parts = [part for part in path.split(":") if part]
+    base_parts = list(Path(base_directory).parts)
+    if (
+        len(path_parts) < len(base_parts) + 1
+        or any(
+            canonical_gradle_name(actual) != canonical_gradle_name(expected)
+            for actual, expected in zip(path_parts, base_parts)
+        )
+    ):
+        return None
+    feature = path_parts[len(base_parts)]
+    remainder = path_parts[len(base_parts) + 1:]
+    role = "aggregation" if not remainder else remainder[-1]
+    return feature, role
+
+
+def project_role(path: str, base_directory: str) -> str:
+    target = feature_target(path, base_directory)
+    if target:
+        return target[1]
+    parts = [part.lower() for part in path.split(":") if part]
+    if parts and parts[0] in {"test", "test-support", "fixtures"}:
+        return "test-support"
+    last = parts[-1] if parts else ""
+    if last in {"app", "androidapp", "composeapp", "application"}:
+        return "app"
+    return last
+
+
+def project_dependencies(expression: str) -> list[str]:
+    dependencies = []
+    for regex in PROJECT_RES:
+        for match in regex.finditer(expression):
+            dependency = match.group(1)
+            if not dependency.startswith(":"):
+                segments = [
+                    re.sub(r"(?<!^)(?=[A-Z])", "-", segment).lower()
+                    for segment in dependency.split(".")
+                ]
+                dependency = ":" + ":".join(segments)
+            dependencies.append(dependency)
+    return dependencies
+
+
+def validate_feature_dependency_edges(spec: dict) -> None:
+    owner = spec["feature"]
+    base_directory = spec["base_directory"]
+    for source_role, config in spec["layers"].items():
+        if not config.get("enabled", False):
+            continue
+        for expression in config.get("dependencies", []):
+            for target_path in project_dependencies(expression):
+                target = feature_target(target_path, base_directory)
+                target_role = project_role(target_path, base_directory)
+                if source_role == "shared-ui" and target_role == "shared-ui":
+                    raise ValueError(
+                        f"shared-ui must not depend on another shared-ui: {target_path}"
+                    )
+                if target_role == "shared-ui" and source_role != "ui":
+                    raise ValueError(
+                        f"{source_role} must not depend on feature shared-ui: {target_path}"
+                    )
+                if (
+                    source_role == "shared-ui"
+                    and target_role in {"data", "app", "test", "test-support", "fixtures"}
+                ):
+                    raise ValueError(
+                        f"shared-ui must not depend on {target_role}: {target_path}"
+                    )
+                if not target:
+                    continue
+                target_feature, _ = target
+                if (
+                    source_role == "shared-ui"
+                    and canonical_gradle_name(target_feature) != canonical_gradle_name(owner)
+                    and target_role in {"domain", "navigation"}
+                ):
+                    raise ValueError(
+                        "shared-ui may depend only on its owner's feature contracts: "
+                        f"{target_path}"
+                    )
+                if source_role == "shared-ui" and target_role == "ui":
+                    raise ValueError(
+                        f"shared-ui must not depend on a feature ui module: {target_path}"
+                    )
+                if source_role == "shared-ui" and target_role == "aggregation":
+                    raise ValueError(
+                        f"shared-ui must not depend on a feature root: {target_path}"
+                    )
+    for expression in spec.get("aggregation", {}).get("dependencies", []):
+        for target_path in project_dependencies(expression):
+            target = feature_target(target_path, base_directory)
+            target_role = project_role(target_path, base_directory)
+            if (
+                target_role == "shared-ui"
+                and (
+                    not target
+                    or canonical_gradle_name(target[0]) != canonical_gradle_name(owner)
+                )
+            ):
+                raise ValueError(
+                    f"aggregation must not expose another feature's shared-ui: {target_path}"
+                )
 
 
 def safe(root: Path, relative: Path | str) -> Path:
@@ -123,15 +242,23 @@ def build_text(platform: str, source_set: str, test_source_set: str, config: dic
     )
 
 
-def source_roots(spec: dict, layer: str, layer_dir: Path) -> list[Path]:
+def source_roots(spec: dict, layer: str, layer_dir: Path, config: dict) -> list[Path]:
     platform = spec["platform"]
     main_source = spec.get("source_set") or ("commonMain" if platform == "kmp" else "main")
     test_source = spec.get("test_source_set") or ("commonTest" if platform == "kmp" else "test")
-    package = Path(*spec["package"].split(".")) if layer == "aggregation" else Path(*spec["package"].split("."), layer)
+    package_suffix = config.get(
+        "package_suffix",
+        "sharedui" if layer == "shared-ui" else layer,
+    )
+    package = (
+        Path(*spec["package"].split("."))
+        if layer == "aggregation"
+        else Path(*spec["package"].split("."), *package_suffix.split("."))
+    )
     roots = [layer_dir / "src" / main_source / "kotlin" / package]
     if layer not in {"test", "aggregation"}:
         roots.append(layer_dir / "src" / test_source / "kotlin" / package)
-    if layer == "ui" and spec.get("create_resource_directory", False):
+    if layer in {"shared-ui", "ui"} and spec.get("create_resource_directory", False):
         if platform == "kmp":
             roots.append(layer_dir / "src" / main_source / "composeResources")
         else:
@@ -151,7 +278,7 @@ def create_plan(root: Path, spec: dict) -> tuple[list[tuple[Path, str]], list[Pa
     if spec.get("aggregation_module", True):
         aggregation = spec.get("aggregation", {"plugins": [], "dependencies": []})
         files.append((feature_dir / build_name, build_text(spec["platform"], main_source_set, test_source_set, aggregation)))
-        directories.extend(source_roots(spec, "aggregation", feature_dir))
+        directories.extend(source_roots(spec, "aggregation", feature_dir, aggregation))
 
     modules = [module_prefix] if spec.get("aggregation_module", True) else []
     for layer in KNOWN_LAYERS:
@@ -160,7 +287,7 @@ def create_plan(root: Path, spec: dict) -> tuple[list[tuple[Path, str]], list[Pa
             continue
         layer_dir = feature_dir / layer
         files.append((layer_dir / build_name, build_text(spec["platform"], main_source_set, test_source_set, config)))
-        directories.extend(source_roots(spec, layer, layer_dir))
+        directories.extend(source_roots(spec, layer, layer_dir, config))
         modules.append(f"{module_prefix}:{layer}")
     return files, directories, modules
 

@@ -10,7 +10,8 @@
     "feature_root": "feature",
     "core_root": "core",
     "utility_root": "util",
-    "feature_layers": ["domain", "data", "navigation", "ui", "test"],
+    "feature_layers": ["domain", "data", "navigation", "ui"],
+    "optional_feature_layers": ["shared-ui", "test"],
     "aggregation_module": true,
     "kmp_shared_source_set": "commonMain",
     "android_or_jvm_source_set": "main"
