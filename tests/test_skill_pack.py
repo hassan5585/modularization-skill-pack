@@ -63,11 +63,47 @@ class SkillPackTests(unittest.TestCase):
                     for item in spec["layers"][role]["dependencies"]
                 ))
 
+    def test_repository_generator_previews_and_creates_a_verified_starter(self) -> None:
+        script = PACK / "create-kmp-repository/scripts/create_kmp_repository.py"
+        output = self.temporary / "orbit-notes"
+        arguments = (
+            "--app-name", "Orbit Notes",
+            "--output", str(output),
+            "--package-name", "com.example.orbitnotes",
+        )
+
+        preview = run(script, *arguments)
+        self.assertIn("KMP repository creation preview", preview.stdout)
+        self.assertIn("devDebug, devRelease, prodDebug, prodRelease", preview.stdout)
+        self.assertFalse(output.exists())
+
+        run(script, *arguments, "--apply", "--no-git")
+        manifest = json.loads((output / "bootstrap-manifest.json").read_text())
+        self.assertEqual("Orbit Notes", manifest["app_name"])
+        self.assertEqual("orbit-notes", manifest["root_project_name"])
+        self.assertEqual("com.example.orbitnotes", manifest["package_name"])
+        self.assertEqual(
+            json.loads((PACK / "skill-pack.json").read_text())["skills"],
+            manifest["installed_skills"],
+        )
+        self.assertTrue((output / "gradle/wrapper/gradle-wrapper.jar").is_file())
+        self.assertTrue(
+            (
+                output
+                / "feature/home/ui/src/commonMain/kotlin/com/example/orbitnotes/home/ui/HomeScreen.kt"
+            ).is_file()
+        )
+        self.assertTrue((output / "iosApp/iosApp.xcodeproj/xcshareddata/xcschemes/Dev.xcscheme").is_file())
+        self.assertTrue((output / ".agents/skills/create-kmp-repository/SKILL.md").is_file())
+        verification = run(output / "scripts/verify_repository.py")
+        self.assertIn("Repository verification passed", verification.stdout)
+        run(script, *arguments, "--apply", "--no-git", expected=2)
+
     def test_installer_uses_manifest_and_refuses_conflicts(self) -> None:
         target = self.temporary / "repository"
         target.mkdir()
         preview = run(PACK / "install_skill_pack.py", "--target", str(target))
-        self.assertIn("Dry run: 6 skill(s)", preview.stdout)
+        self.assertIn("Dry run: 7 skill(s)", preview.stdout)
         run(PACK / "install_skill_pack.py", "--target", str(target), "--apply")
         for name in json.loads((PACK / "skill-pack.json").read_text())["skills"]:
             self.assertTrue((target / ".agents" / "skills" / name / "SKILL.md").is_file())

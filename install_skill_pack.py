@@ -73,7 +73,10 @@ def main() -> int:
         return 4
     finally:
         shutil.rmtree(staging, ignore_errors=True)
-    print("Skill pack installed. Start with `$modularize-kotlin-codebase` in the target repository.")
+    print(
+        "Skill pack installed. Use `$create-kmp-repository` for a greenfield KMP app "
+        "or `$modularize-kotlin-codebase` for an existing codebase."
+    )
     return 0
 
 

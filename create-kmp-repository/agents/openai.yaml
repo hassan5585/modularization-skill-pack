@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create KMP Repository"
+  short_description: "Generate a production-ready modular KMP app"
+  default_prompt: "Use $create-kmp-repository to create a new modular Kotlin Multiplatform mobile repository."

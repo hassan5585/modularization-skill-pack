@@ -1,0 +1,5 @@
+<resources>
+    <string name="home_title">@@APP_NAME_XML@@</string>
+    <string name="home_ready">Running on %1$s. Your Kotlin Multiplatform foundation is ready.</string>
+    <string name="home_architecture">Core, feature, utility, navigation, data, UI, tests, and convention plugins are wired for your first product slice.</string>
+</resources>
