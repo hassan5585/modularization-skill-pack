@@ -103,6 +103,12 @@ Actual `*Test` classes remain in the owning module’s test source set.
 
 Expect/actual implementations, Android services, iOS interop, JVM file/process adapters, and platform resource bridges belong in existing platform source sets or a cross-cutting `real` implementation module. Do not force them into shared domain.
 
+For a KMP application framework, distinguish the deliberate Swift facade from
+Kotlin-only platform implementation. Public declarations, `api` dependencies,
+and native dependency exports are separate evidence: none alone proves that a
+type belongs in the external Swift contract. Record accidental Objective-C
+visibility as boundary debt rather than classifying it as a public platform API.
+
 ## 3. Feature signals
 
 Strong feature candidates combine several of:

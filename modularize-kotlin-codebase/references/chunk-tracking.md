@@ -26,6 +26,7 @@ A chunk must have one reviewable architectural purpose and a verification bounda
 - migrate one feature’s data layer plus repository tests;
 - migrate and verify one provider feature’s shared UI before consumer UI;
 - register one feature in DI/navigation/app aggregation;
+- verify one intentional public dependency or native framework boundary change;
 - remove one named compatibility adapter;
 - run full-slice verification.
 
@@ -68,7 +69,7 @@ Required introduced failures and required not-run checks block completion. A chu
 
 ## 5. Decisions, risks, and temporary adapters
 
-Record decisions when ownership, layering, plugin decomposition, public API, or test-support placement is not mechanically determined. Record risks before touching route identity, serialization, schemas, generated code, resources, native exports, or reflection.
+Record decisions when ownership, layering, plugin decomposition, public API, native Swift API, or test-support placement is not mechanically determined. Record risks before touching route identity, serialization, schemas, generated code, resources, project `api` edges, native framework configuration, or reflection.
 
 Every compatibility adapter needs a unique id, repository path, owner, and objective removal condition. Resolve it in the ledger when deleted. Final verification fails conceptually while any adapter is open unless the user explicitly approves it as retained architecture.
 

@@ -20,6 +20,7 @@ Before structural edits, capture:
 - unit, lint, static-analysis, and code-generation checks;
 - known failures with exact output;
 - generated directories that must not be moved manually.
+- for KMP Apple frameworks, the latest existing framework/header baseline and intentional Swift bridge.
 
 Never attribute a baseline failure to the migration without evidence.
 
@@ -101,11 +102,12 @@ Run from fastest/local to broadest:
 5. direct dependent compile/tests;
 6. feature aggregation check;
 7. app/shared-app compile;
-8. platform packaging/native link where relevant;
-9. lint/static analysis;
-10. full repository checks when risk or milestone warrants them.
+8. existing generated native framework/header audit where relevant;
+9. platform packaging/native link when a fresh artifact is required;
+10. lint/static analysis;
+11. full repository checks when risk or milestone warrants them.
 
-Generated code, resources, navigation registration, database schemas, and native exports require actual Gradle tasks; static checks cannot prove them.
+Generated code, resources, navigation registration, database schemas, and native framework output require actual Gradle tasks; static checks cannot prove them. Inspect an existing framework before triggering an expensive release link, and keep Devirtualization/DCE enabled in the final configuration.
 
 ## 7. Completion criteria
 
@@ -119,5 +121,6 @@ A feature migration is done when:
 - no direct cross-feature regular-UI edge or shared-UI chain exists;
 - changed-layer and app checks pass;
 - documentation reflects the new owner and entry points.
+- all `api` project dependencies are intentional and any Apple framework retains its approved narrow Swift surface.
 
 The overall monolith split is done only when the remaining monolith is an intentional app shell or platform entry point, not a residual dumping ground.

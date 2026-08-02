@@ -21,6 +21,7 @@ Before editing:
 - identify generated sources/resources and never move generated output;
 - list consumers outside the feature;
 - list DI, navigation, serialization, database, manifest, native, and app registrations;
+- for an Apple framework, record the intended Swift bridge, current generated-header counts/symbols, and every public dependency/export edge;
 - create a feature spec using existing plugin IDs and dependency aliases.
 
 ## 2. Target module contract
@@ -84,7 +85,7 @@ Move presentation state, controllers/ViewModels, screens, resources, and UI help
 
 ### Batch H: wiring and cleanup
 
-Register settings, app dependencies, DI, navigation, serializers, manifests, and native exports. Compile app/platform deliverables. Remove legacy sources and adapters.
+Register settings, app dependencies, DI, navigation, serializers, manifests, and the existing native bridge. Keep new leaf dependencies on `implementation` unless a reviewed public Kotlin signature requires `api`; an approved aggregation root may re-export its own production children as the app-facing Kotlin facade. Do not confuse that Kotlin contract with a native dependency export or expose migrated modules merely to make them visible to Swift. Compile app/platform deliverables and audit the generated framework header before removing legacy sources and adapters.
 
 ## 4. Registration checklist
 
@@ -97,7 +98,7 @@ Inspect the target project for:
 - JSON polymorphic serializers or service-loader entries;
 - Android manifests, resources, consumer ProGuard rules, and build features;
 - database schemas/migrations and KSP/KAPT outputs;
-- KMP target/source-set dependencies and native framework exports;
+- KMP target/source-set dependency visibility, framework configuration, and the intentional Swift bridge;
 - CI task lists, lint baselines, and test aggregation.
 
 Search by the old package and key class names after each registration step.
@@ -126,7 +127,7 @@ Preserve unless explicitly migrating:
 - resource names referenced from native or external code;
 - application IDs, namespaces, manifest authorities, and service names;
 - reflection/service-loader names and shrinker rules;
-- iOS framework/module names and exported symbols.
+- iOS framework/module names and intentionally supported exported symbols. Do not preserve accidental implementation exports as public API without an explicit consumer decision.
 
 Package moves can change generated or reflection identity even when Kotlin compilation succeeds. Run the relevant packaging/linking tests.
 
@@ -139,6 +140,8 @@ Package moves can change generated or reflection identity even when Kotlin compi
 - Architecture checks show no new forbidden edges or cycles.
 - Shared-UI providers are verified before consumers and no shared-UI chain exists.
 - Test support is absent from production dependency graphs.
+- Every production `api` project dependency has a public Kotlin or documented aggregation-facade justification.
+- KMP Apple frameworks pass static native rules and a generated-header audit without transitive export or permanently disabled compiler phases.
 - Old sources, duplicate resources, and obsolete registrations are removed.
 - Temporary compatibility code has been removed or has a named owner and deletion condition.
 - Feature and architecture documentation identify the new modules and entry points.

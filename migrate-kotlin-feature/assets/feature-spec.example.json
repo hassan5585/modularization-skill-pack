@@ -60,7 +60,7 @@
     "plugins": ["alias(libs.plugins.example.feature.root)"],
     "dependencies": [
       "api(project(\":feature:orders:domain\"))",
-      "implementation(project(\":feature:orders:data\"))",
+      "api(project(\":feature:orders:data\"))",
       "api(project(\":feature:orders:navigation\"))",
       "api(project(\":feature:orders:ui\"))"
     ]

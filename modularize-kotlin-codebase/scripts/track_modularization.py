@@ -326,7 +326,11 @@ def initial_state(root: Path, plan: dict | None, config: dict | None) -> dict:
         by_id = {item["id"]: item for item in chunks}
         by_id["baseline"]["planned_checks"] = verification.get("baseline_commands", [])
         by_id["conventions"]["planned_checks"] = verification.get("build_logic_commands", [])
-        by_id["final-verification"]["planned_checks"] = verification.get("app_compile_commands", []) + verification.get("architecture_commands", [])
+        by_id["final-verification"]["planned_checks"] = (
+            verification.get("app_compile_commands", [])
+            + verification.get("architecture_commands", [])
+            + verification.get("native_framework_commands", [])
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": now(),

@@ -196,7 +196,10 @@ Do not copy plugin IDs or dependency aliases from another repository. Detect the
 - Default shared behavior to `commonMain` and tests to `commonTest`.
 - Preserve existing target hierarchy and intermediate source sets.
 - Put platform implementations in matching platform source sets.
-- Verify native frameworks/exports, CocoaPods/SwiftPM interop, resource generation, and host tests.
+- Default leaf project dependencies to `implementation`; justify `api` from an intentional public Kotlin signature or a documented aggregation-root facade contract.
+- For app frameworks, keep a narrow Swift-facing bridge and hide/internalize Kotlin-only graphs, repositories, ViewModels, and feature models.
+- Do not export dependency modules or enable transitive export merely to make app internals visible to Swift.
+- Verify generated framework headers, CocoaPods/SwiftPM interop, resource generation, host tests, and native links without permanent disabled compiler phases.
 
 ### Android-only
 
@@ -229,3 +232,5 @@ Create platform-specific base conventions and share capability plugins only wher
 - Breaking route, wire, schema, or resource identity during package moves.
 - Migrating all layers horizontally instead of completing one vertical slice.
 - Deleting old code before app registration and dependent modules compile.
+- Re-exporting feature/implementation modules from a Kotlin/Native app framework.
+- Treating `-Xdisable-phases` or a larger linker heap as the architectural fix for an accidentally broad native surface.

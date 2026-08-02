@@ -1,4 +1,4 @@
 interface:
   display_name: "Modularize Kotlin Codebase"
-  short_description: "Orchestrate safe Kotlin modularization migrations"
-  default_prompt: "Use $modularize-kotlin-codebase to plan and execute an incremental modularization of this Kotlin codebase."
+  short_description: "Orchestrate safe Kotlin modularization"
+  default_prompt: "Use $modularize-kotlin-codebase to execute an incremental modularization with narrow dependency and Kotlin/Native boundaries."

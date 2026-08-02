@@ -34,6 +34,62 @@
   "direct_project_imports": {
     "severity": null
   },
+  "dependency_visibility": {
+    "api_project_dependency_severity": "warning",
+    "allowed_api_project_dependencies": [
+      {
+        "source": ":feature:orders",
+        "target": ":feature:orders:domain",
+        "reason": "The optional aggregation root is the documented app-facing Kotlin feature facade."
+      },
+      {
+        "source": ":feature:orders",
+        "target": ":feature:orders:data",
+        "reason": "The optional aggregation root is the documented app-facing Kotlin feature facade."
+      },
+      {
+        "source": ":feature:orders",
+        "target": ":feature:orders:navigation",
+        "reason": "The optional aggregation root is the documented app-facing Kotlin feature facade."
+      },
+      {
+        "source": ":feature:orders",
+        "target": ":feature:orders:shared-ui",
+        "reason": "The optional aggregation root exposes its approved provider-owned shared UI to Kotlin consumers."
+      },
+      {
+        "source": ":feature:orders",
+        "target": ":feature:orders:ui",
+        "reason": "The optional aggregation root is the documented app-facing Kotlin feature facade."
+      },
+      {
+        "source": ":feature:orders:navigation",
+        "target": ":core:navigation",
+        "reason": "Public destination contracts extend core navigation types."
+      },
+      {
+        "source": ":feature:orders:test",
+        "target": ":test:core",
+        "reason": "Public reusable test fixtures expose shared test-foundation contracts."
+      },
+      {
+        "source": ":test:core",
+        "target": ":core:domain",
+        "reason": "Public core-domain fakes implement and expose core domain contracts."
+      },
+      {
+        "source": ":test:core",
+        "target": ":core:navigation",
+        "reason": "Public navigation fakes implement and expose core navigation contracts."
+      }
+    ]
+  },
+  "native_framework": {
+    "exported_dependency_severity": "error",
+    "export_flag_severity": "error",
+    "transitive_export_severity": "error",
+    "disabled_phase_severity": "error"
+  },
   "conventions": {
     "included_builds": ["build-logic"],
     "validate_included_build_plugins": true,

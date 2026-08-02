@@ -1,6 +1,6 @@
 ---
 name: migrate-kotlin-feature
-description: Incrementally extract one vertical product feature from a Kotlin/Gradle monolith into an aggregation module plus domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules while preserving the project’s existing UI, DI, networking, persistence, navigation, serialization, and testing libraries. Use for pilot feature extraction, repeated feature-by-feature migration, shared-UI extraction, source moves, package rewrites, module registration, dependency rewiring, or compatibility-adapter removal.
+description: Incrementally extract one vertical product feature from a Kotlin/Gradle monolith into an aggregation module plus domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules while preserving the project’s existing UI, DI, networking, persistence, navigation, serialization, testing libraries, and native framework boundary. Use for pilot feature extraction, repeated feature-by-feature migration, shared-UI extraction, source moves, package rewrites, module registration, dependency rewiring, public API narrowing, or compatibility-adapter removal.
 ---
 
 # Migrate Kotlin Feature
@@ -19,6 +19,7 @@ Require or derive:
 - required core/utility dependencies;
 - app, DI, navigation, resource, generated-code, and test registration points;
 - baseline and layer-local verification commands.
+- for KMP Apple frameworks, the framework-producing module, intended Swift bridge, current header baseline, and native audit command.
 
 Read [references/feature-migration-procedure.md](references/feature-migration-procedure.md) before moving code. Use [assets/feature-spec.example.json](assets/feature-spec.example.json) for the base feature shape or [assets/feature-spec-with-shared-ui.example.json](assets/feature-spec-with-shared-ui.example.json) when reviewed reuse requires an optional provider module. Use [assets/test-foundations-spec.example.json](assets/test-foundations-spec.example.json) for repository-wide test foundations when required, and [assets/move-manifest.example.json](assets/move-manifest.example.json) for controlled moves.
 
@@ -98,6 +99,8 @@ Move resources with their owning UI. Check generated resource packages and impor
 
 Register modules in settings, app dependencies, DI graph, navigation graph, deep links, serialization registries, generated-code configuration, and platform entry points. Keep the root aggregation module thin.
 
+Use `implementation` for new leaf-module project dependencies by default. Add `api` only when a reviewed public Kotlin signature requires the dependency type. An approved aggregation root may re-export its own production children as the app-facing Kotlin feature facade. This does not authorize exporting those modules to Swift: keep feature internals behind the existing native bridge.
+
 ### 8. Remove the old path
 
 Delete old sources only after references resolve from new modules and verification passes. Remove temporary adapters when all consumers have migrated.
@@ -151,6 +154,8 @@ Domain, data, and navigation must not depend on feature shared UI. Shared UI
 must not depend on regular feature UI, any feature root, or any other
 shared-UI module.
 
+Treat every `api` project edge as a public-contract decision. For application frameworks, never add `framework.export(...)`, `export(project(...))`, `export = true`, or `transitiveExport = true` merely to surface migrated Kotlin code to Swift.
+
 ## Checkpoints
 
 After each batch:
@@ -162,6 +167,7 @@ After each batch:
 5. For shared UI, compile every consuming UI after the provider.
 6. Run architecture verification.
 7. Compile the app or relevant deliverable.
-8. Record new failures separately from the baseline.
+8. When the app produces an Apple framework, audit a current device framework header with `$audit-kotlin-native-framework`; link debug first only when a fresh artifact is required.
+9. Record new failures separately from the baseline.
 
 The feature is complete only when no source, resource, registration, fixture, or behavior belonging to it remains accidentally in the monolith and all temporary adapters are removed or explicitly tracked.

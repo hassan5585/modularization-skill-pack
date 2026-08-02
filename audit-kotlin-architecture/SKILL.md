@@ -1,6 +1,6 @@
 ---
 name: audit-kotlin-architecture
-description: Inspect an Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repository and produce an evidence-backed inventory and modularization plan. Use before splitting a monolith, choosing feature boundaries, mapping files into domain/data/navigation/UI/optional shared-UI/test layers, identifying core or utility candidates, finding dependency cycles and hotspots, or determining which existing libraries and build capabilities must be preserved.
+description: Inspect an Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repository and produce an evidence-backed inventory and modularization plan. Use before splitting a monolith, choosing feature boundaries, mapping files into domain/data/navigation/UI/optional shared-UI/test layers, identifying core or utility candidates, finding dependency cycles and hotspots, reviewing public dependency/native framework surfaces, or determining which existing libraries and build capabilities must be preserved.
 ---
 
 # Audit Kotlin Architecture
@@ -49,6 +49,7 @@ Determine:
 - Android, JVM, native, and KMP targets;
 - version catalogs and included build logic;
 - source sets, generated sources, resources, manifests, schemas, and native interop;
+- dependency configurations (`implementation`, `api`, test-only, and native exports), framework-producing modules, Swift/Objective-C bridges, and generated framework headers when present;
 - CI build, lint, test, code-generation, and packaging tasks.
 
 ### Library capabilities
@@ -121,6 +122,7 @@ Before accepting the plan:
 - Separate observed facts from inferred ownership.
 - Include a pilot feature, dependency-first migration order, and verification commands.
 - Flag route identity, serialization, database, platform, and generated-code risks.
+- For KMP Apple frameworks, record the intended Swift API, current header baseline, every dependency export, and every `api` edge that needs public-contract review. Treat `-Xdisable-phases` as diagnostic debt, not architecture.
 - Ensure the target plan uses libraries already present unless a gap is proven.
 
 The audit is complete only when another agent can start one feature migration without rediscovering the repository.

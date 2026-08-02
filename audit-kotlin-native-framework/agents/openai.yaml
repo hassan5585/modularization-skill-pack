@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Kotlin Native Framework"
+  short_description: "Guard Kotlin/Native Swift API boundaries"
+  default_prompt: "Use $audit-kotlin-native-framework to inspect this Kotlin/Native framework and enforce a narrow Swift-facing API."

@@ -50,16 +50,151 @@ class SkillPackTests(unittest.TestCase):
         registered = {item["id"] for item in convention_spec["plugins"]}
         required = set(architecture_rules["conventions"]["required_registered_plugin_ids"])
         self.assertTrue(required.issubset(registered))
+        for name in ("feature-spec.example.json", "feature-spec-with-shared-ui.example.json"):
+            spec = json.loads((PACK / "migrate-kotlin-feature/assets" / name).read_text())
+            self.assertTrue(all(item.startswith("api(") for item in spec["aggregation"]["dependencies"]))
+            self.assertIn(
+                "api(project(\":core:navigation\"))",
+                spec["layers"]["navigation"]["dependencies"],
+            )
+            for role in ("domain", "data", "ui"):
+                self.assertFalse(any(
+                    item.startswith("api(")
+                    for item in spec["layers"][role]["dependencies"]
+                ))
 
     def test_installer_uses_manifest_and_refuses_conflicts(self) -> None:
         target = self.temporary / "repository"
         target.mkdir()
         preview = run(PACK / "install_skill_pack.py", "--target", str(target))
-        self.assertIn("Dry run: 5 skill(s)", preview.stdout)
+        self.assertIn("Dry run: 6 skill(s)", preview.stdout)
         run(PACK / "install_skill_pack.py", "--target", str(target), "--apply")
         for name in json.loads((PACK / "skill-pack.json").read_text())["skills"]:
             self.assertTrue((target / ".agents" / "skills" / name / "SKILL.md").is_file())
         run(PACK / "install_skill_pack.py", "--target", str(target), "--apply", expected=3)
+
+    def test_native_framework_audit_enforces_reviewed_header_boundary(self) -> None:
+        framework = self.temporary / "Shared.framework"
+        header = framework / "Headers" / "Shared.h"
+        write(framework / "Shared", "binary")
+        write(
+            header,
+            "@interface SharedAppBridge : NSObject\n@end\n"
+            "@interface SharedSettingsViewModel : NSObject\n@end\n",
+        )
+        rules = {
+            "schema_version": 1,
+            "max_header_lines": 20,
+            "max_objc_declarations": 3,
+            "required_symbol_patterns": ["AppBridge"],
+            "forbidden_symbol_patterns": [
+                {"label": "ViewModels", "pattern": "ViewModel"},
+            ],
+        }
+        rules_path = self.temporary / "native-rules.json"
+        rules_path.write_text(json.dumps(rules), encoding="utf-8")
+        audit_path = self.temporary / "native-audit.json"
+        script = PACK / "audit-kotlin-native-framework/scripts/audit_native_framework.py"
+        failed = run(
+            script,
+            "--path", str(framework),
+            "--rules", str(rules_path),
+            "--check",
+            "--json-out", str(audit_path),
+            expected=1,
+        )
+        self.assertIn("CHECK FAILED", failed.stdout)
+        result = json.loads(audit_path.read_text())
+        self.assertEqual(2, result["objc_declarations"])
+        self.assertTrue(any("ViewModels" in item for item in result["violations"]))
+
+        write(header, "@interface SharedAppBridge : NSObject\n@end\n")
+        passed = run(
+            script,
+            "--path", str(framework),
+            "--rules", str(rules_path),
+            "--check",
+        )
+        self.assertIn("CHECK PASSED", passed.stdout)
+        run(script, "--path", str(framework), "--check", expected=2)
+
+    def test_checker_flags_unapproved_api_and_native_linker_workarounds(self) -> None:
+        root = self.temporary / "repo"
+        write(root / "feature/orders/domain/build.gradle.kts")
+        build_file = root / "composeApp/build.gradle.kts"
+        write(
+            build_file,
+            "dependencies {\n"
+            "  commonMainApi(project(\":feature:orders:domain\"))\n"
+            "}\n"
+            "framework {\n"
+            "  export(project(\":feature:orders:domain\"))\n"
+            "  export = true\n"
+            "  transitiveExport = true\n"
+            "}\n",
+        )
+        convention_source = root / "plugins/convention/src/main/kotlin/NativeConvention.kt"
+        write(
+            convention_source,
+            "val nativeFlag = \"-Xdisable-phases=DevirtualizationAnalysis,DCEPhase\"\n",
+        )
+        write(root / "sample/settings.gradle.kts", 'rootProject.name = "unrelated"\n')
+        write(
+            root / "sample/app/build.gradle.kts",
+            "freeCompilerArgs.add(\"-Xdisable-phases=DevirtualizationAnalysis,DCEPhase\")\n",
+        )
+        rules = json.loads(
+            (PACK / "verify-kotlin-modules/assets/architecture-rules.example.json").read_text()
+        )
+        rules["required_feature_layers"] = []
+        rules["required_feature_layers_by_feature"] = {}
+        rules["check_settings_registration"] = False
+        rules["conventions"] = {
+            "included_builds": [],
+            "validate_included_build_plugins": False,
+            "required_registered_plugin_ids": [],
+            "required_plugins_by_role": {},
+            "forbidden_plugins_by_role": {},
+        }
+        rules_path = self.temporary / "native-architecture-rules.json"
+        rules_path.write_text(json.dumps(rules), encoding="utf-8")
+        findings_path = self.temporary / "native-findings.json"
+        run(
+            PACK / "verify-kotlin-modules/scripts/check_architecture.py",
+            "--root", str(root),
+            "--rules", str(rules_path),
+            "--json-out", str(findings_path),
+            expected=1,
+        )
+        findings = json.loads(findings_path.read_text())["findings"]
+        finding_ids = {item["rule"] for item in findings}
+        self.assertTrue({
+            "unapproved-api-project-dependency",
+            "native-exported-project-dependency",
+            "native-export-flag",
+            "transitive-native-export",
+            "disabled-native-compiler-phase",
+        }.issubset(finding_ids))
+
+        rules["dependency_visibility"]["allowed_api_project_dependencies"].append({
+            "source": ":composeApp",
+            "target": ":feature:orders:domain",
+            "reason": "Fixture models an explicitly reviewed Kotlin facade edge.",
+        })
+        rules_path.write_text(json.dumps(rules), encoding="utf-8")
+        write(
+            build_file,
+            "dependencies {\n"
+            "  commonMainApi(project(\":feature:orders:domain\"))\n"
+            "}\n",
+        )
+        write(convention_source, "val nativeConfigurationIsNarrow = true\n")
+        passed = run(
+            PACK / "verify-kotlin-modules/scripts/check_architecture.py",
+            "--root", str(root),
+            "--rules", str(rules_path),
+        )
+        self.assertIn("0 error(s), 0 warning(s)", passed.stdout)
 
     def test_audit_excludes_unrelated_nested_build_and_prefers_module_ownership(self) -> None:
         root = self.temporary / "repo"
@@ -525,7 +660,12 @@ class SkillPackTests(unittest.TestCase):
         config = {
             "schema_version": 1,
             "project": {"name": "fixture"},
-            "verification": {"baseline_commands": ["./gradlew check"]},
+            "verification": {
+                "baseline_commands": ["./gradlew check"],
+                "app_compile_commands": ["./gradlew :app:assembleDebug"],
+                "architecture_commands": ["python3 check_architecture.py"],
+                "native_framework_commands": ["python3 audit_native_framework.py --check"],
+            },
         }
         config_path = self.temporary / "config.json"
         config_path.write_text(json.dumps(config), encoding="utf-8")
@@ -536,6 +676,15 @@ class SkillPackTests(unittest.TestCase):
         run(tracker, "--root", str(root), "init", "--config", str(config_path), "--plan", str(plan_path))
         initial = json.loads((root / ".modularization/work-state.json").read_text())
         self.assertIn("test-foundations", {item["id"] for item in initial["chunks"]})
+        final_verification = next(item for item in initial["chunks"] if item["id"] == "final-verification")
+        self.assertEqual(
+            [
+                "./gradlew :app:assembleDebug",
+                "python3 check_architecture.py",
+                "python3 audit_native_framework.py --check",
+            ],
+            final_verification["planned_checks"],
+        )
         run(tracker, "--root", str(root), "start", "--chunk", "baseline")
         run(
             tracker, "--root", str(root), "complete", "--chunk", "baseline",

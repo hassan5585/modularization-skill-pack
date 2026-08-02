@@ -12,13 +12,14 @@ Use JSON with `schema_version: 1`. Treat paths as repository-relative POSIX path
 - convention plugin strategy;
 - architecture rules and narrow exceptions;
 - baseline verification commands.
+- public project dependency allowances and native framework audit commands/rules when applicable.
 
 ## Audit
 
 `audit.json` records observed facts and heuristic classifications:
 
 - project/build detection;
-- modules and project dependencies;
+- modules and project dependencies, including observed Gradle configurations such as `implementation`, `api`, test-only, and native export;
 - source files, packages, imports, inferred feature/layer, and confidence;
 - manifests, resources, schemas, shrinker rules, and native artifacts with module/source-set ownership;
 - external library/import families;
@@ -39,6 +40,7 @@ Do not hand-edit generated audit fields. Put corrections in an overrides file.
 - explicit shared-UI consumer/provider module edges used for migration ordering;
 - shared-UI graph violations and the non-waivable plan-acceptance gate;
 - dependency risks;
+- public API/native framework risks and the approved Swift bridge when applicable;
 - pilot recommendation and migration sequence.
 
 The plan becomes approved only after an agent or user reviews ambiguous assignments.

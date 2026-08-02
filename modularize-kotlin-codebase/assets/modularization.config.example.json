@@ -34,7 +34,8 @@
     "baseline_commands": ["./gradlew check"],
     "build_logic_commands": ["./gradlew -p build-logic build"],
     "app_compile_commands": ["./gradlew :app:assembleDebug"],
-    "architecture_commands": ["python3 .agents/skills/verify-kotlin-modules/scripts/check_architecture.py --root . --rules .modularization/architecture-rules.json"]
+    "architecture_commands": ["python3 .agents/skills/verify-kotlin-modules/scripts/check_architecture.py --root . --rules .modularization/architecture-rules.json"],
+    "native_framework_commands": []
   },
   "tracking": {
     "state": ".modularization/work-state.json",

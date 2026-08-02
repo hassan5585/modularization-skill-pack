@@ -33,6 +33,9 @@ STATIC_MODULE_RE = re.compile(r"[\"'](:[A-Za-z0-9_:-]+)[\"']")
 PLUGIN_REGISTRATION_START_RE = re.compile(r"\b(?:register|create)\s*\(\s*[\"'][^\"']+[\"']\s*\)\s*\{")
 REGISTERED_PLUGIN_ID_RE = re.compile(r"\bid\s*=\s*[\"']([^\"']+)[\"']")
 IMPLEMENTATION_CLASS_RE = re.compile(r"\bimplementationClass\s*=\s*[\"']([^\"']+)[\"']")
+NATIVE_EXPORT_FLAG_RE = re.compile(r"\bexport\s*=\s*true\b")
+TRANSITIVE_EXPORT_RE = re.compile(r"\btransitiveExport\s*=\s*true\b")
+DISABLED_PHASE_RE = re.compile(r"-Xdisable-phases(?:=|\s+)[^\"'\s,)]+")
 DEFAULT_FORBIDDEN = {
     "domain": ["data", "navigation", "shared-ui", "ui", "app", "test-support"],
     "data": ["navigation", "shared-ui", "ui", "app", "test-support"],
@@ -50,6 +53,12 @@ NON_SUPPRESSIBLE_RULES = {
     "shared-ui-to-foreign-feature-contract",
     "shared-ui-to-feature-ui",
     "shared-ui-to-feature-root",
+    "disabled-native-compiler-phase",
+    "transitive-native-export",
+}
+NATIVE_NON_SUPPRESSIBLE_RULES = {
+    "disabled-native-compiler-phase",
+    "transitive-native-export",
 }
 
 
@@ -137,6 +146,16 @@ def load_rules(path: Path | None) -> dict:
             "ignored_import_prefixes": [],
             "exceptions": [],
             "required_test_modules": [],
+            "dependency_visibility": {
+                "api_project_dependency_severity": None,
+                "allowed_api_project_dependencies": [],
+            },
+            "native_framework": {
+                "exported_dependency_severity": None,
+                "export_flag_severity": None,
+                "transitive_export_severity": None,
+                "disabled_phase_severity": None,
+            },
             "conventions": {
                 "included_builds": [],
                 "validate_included_build_plugins": False,
@@ -169,6 +188,35 @@ def load_rules(path: Path | None) -> dict:
     conventions = data.get("conventions", {})
     if not isinstance(conventions.get("required_registered_plugin_ids", []), list):
         raise ValueError("conventions.required_registered_plugin_ids must be a list")
+    dependency_visibility = data.get("dependency_visibility", {})
+    if not isinstance(dependency_visibility, dict):
+        raise ValueError("dependency_visibility must be an object")
+    api_severity = dependency_visibility.get("api_project_dependency_severity")
+    if api_severity not in {None, "error", "warning", "info"}:
+        raise ValueError("dependency_visibility.api_project_dependency_severity must be error, warning, info, or null")
+    allowed_api = dependency_visibility.get("allowed_api_project_dependencies", [])
+    if not isinstance(allowed_api, list):
+        raise ValueError("dependency_visibility.allowed_api_project_dependencies must be a list")
+    for item in allowed_api:
+        if not isinstance(item, dict) or any(not item.get(key) for key in ("source", "target", "reason")):
+            raise ValueError("every allowed API project dependency must contain source, target, and reason")
+        if not isinstance(item["source"], str) or not isinstance(item["target"], str) or not isinstance(item["reason"], str):
+            raise ValueError("allowed API project dependency source, target, and reason must be strings")
+        if not item["source"].startswith(":") or not item["target"].startswith(":"):
+            raise ValueError(f"allowed API project dependency source/target must be absolute Gradle module paths: {item}")
+        if any(token in item["source"] or token in item["target"] for token in ("*", "?", "[", "]")):
+            raise ValueError(f"allowed API project dependencies must be exact, not wildcard patterns: {item}")
+    native_framework = data.get("native_framework", {})
+    if not isinstance(native_framework, dict):
+        raise ValueError("native_framework must be an object")
+    for key in (
+        "exported_dependency_severity",
+        "export_flag_severity",
+        "transitive_export_severity",
+        "disabled_phase_severity",
+    ):
+        if native_framework.get(key) not in {None, "error", "warning", "info"}:
+            raise ValueError(f"native_framework.{key} must be error, warning, info, or null")
     for item in data.get("exceptions", []):
         if not isinstance(item, dict):
             raise ValueError("every exception must be an object")
@@ -178,7 +226,8 @@ def load_rules(path: Path | None) -> dict:
         if any(token in item["source"] or token in item["target"] for token in ("*", "?", "[", "]")):
             raise ValueError(f"exception source/target must be exact, not wildcard patterns: {item}")
         if item["rule"] in NON_SUPPRESSIBLE_RULES:
-            raise ValueError(f"shared-ui hard rule cannot be suppressed: {item['rule']}")
+            label = "native hard rule" if item["rule"] in NATIVE_NON_SUPPRESSIBLE_RULES else "shared-ui hard rule"
+            raise ValueError(f"{label} cannot be suppressed: {item['rule']}")
     return data
 
 
@@ -291,11 +340,16 @@ def normalize_project_dependency(
     return kebab if "sharedUi" in segments else literal
 
 
-def project_dependencies(
+def dependency_configuration(line_prefix: str) -> str:
+    match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(\s*)?$", line_prefix)
+    return match.group(1) if match else "unknown"
+
+
+def project_dependency_records(
     text: str,
     known_modules: set[str] | None = None,
-) -> tuple[list[str], list[str]]:
-    """Separate project dependencies found in production and test Gradle blocks.
+) -> list[dict]:
+    """Return static project references with configuration and test context.
 
     This is a lightweight brace-aware parser. It deliberately reports only static
     project references and treats any surrounding block/configuration containing
@@ -305,8 +359,7 @@ def project_dependencies(
         ((match.start(), match.group(1)) for regex in PROJECT_RES for match in regex.finditer(text)),
         key=lambda item: item[0],
     )
-    production: set[str] = set()
-    tests: set[str] = set()
+    records: list[dict] = []
     for position, dependency in matches:
         dependency = normalize_project_dependency(dependency, known_modules)
         stack: list[str] = []
@@ -324,11 +377,59 @@ def project_dependencies(
                 last_boundary = index + 1
         line_prefix = text[text.rfind("\n", 0, position) + 1:position]
         context = " ".join(stack + [line_prefix]).lower()
-        if "test" in context:
-            tests.add(dependency)
-        else:
-            production.add(dependency)
+        records.append({
+            "target": dependency,
+            "configuration": dependency_configuration(line_prefix),
+            "test_only": "test" in context,
+        })
+    unique = {
+        (item["target"], item["configuration"], item["test_only"]): item
+        for item in records
+    }
+    return [unique[key] for key in sorted(unique)]
+
+
+def project_dependencies(
+    text: str,
+    known_modules: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    records = project_dependency_records(text, known_modules)
+    production = {item["target"] for item in records if not item["test_only"]}
+    tests = {item["target"] for item in records if item["test_only"]}
     return sorted(production), sorted(tests)
+
+
+def is_api_configuration(configuration: str) -> bool:
+    lowered = configuration.lower()
+    return lowered == "api" or lowered.endswith("api")
+
+
+def is_export_configuration(configuration: str) -> bool:
+    return configuration.lower() == "export"
+
+
+def find_native_configuration_files(root: Path, ignored: list[str]) -> list[Path]:
+    found: list[Path] = []
+    build_logic_names = {"build-logic", "buildsrc", "plugins", "convention"}
+    for current, dirs, files in os.walk(root):
+        base = Path(current)
+        relative_parts = {part.lower() for part in base.relative_to(root).parts}
+        if (
+            base != root
+            and any((base / name).is_file() for name in ("settings.gradle", "settings.gradle.kts"))
+            and not relative_parts.intersection(build_logic_names)
+        ):
+            dirs[:] = []
+            continue
+        dirs[:] = [directory for directory in dirs if not is_excluded(base / directory, root, ignored)]
+        in_build_logic = bool(relative_parts & build_logic_names)
+        for name in files:
+            path = base / name
+            if name == "gradle.properties" or name.endswith((".gradle", ".gradle.kts")):
+                found.append(path)
+            elif in_build_logic and path.suffix in {".kt", ".kts", ".groovy"}:
+                found.append(path)
+    return sorted(set(found))
 
 
 def applied_plugins(text: str) -> list[str]:
@@ -594,10 +695,16 @@ def analyze(root: Path, rules: dict) -> dict:
         text = strip_gradle_comments(
             build_file.read_text(encoding="utf-8", errors="replace")
         )
-        production_dependencies, test_dependencies = project_dependencies(
+        dependency_records = project_dependency_records(
             text,
             known_modules,
         )
+        production_dependencies = sorted({
+            item["target"] for item in dependency_records if not item["test_only"]
+        })
+        test_dependencies = sorted({
+            item["target"] for item in dependency_records if item["test_only"]
+        })
         module = {
             "path": module_path(build_file.parent, root),
             "directory": build_file.parent.relative_to(root).as_posix() or ".",
@@ -606,12 +713,74 @@ def analyze(root: Path, rules: dict) -> dict:
             "feature": feature_for(build_file.parent, root, rules),
             "dependencies": production_dependencies,
             "test_dependencies": test_dependencies,
+            "project_dependency_configurations": dependency_records,
             "plugins": applied_plugins(text),
         }
         modules.append(module)
         by_dir[build_file.parent] = module
     by_path = {module["path"]: module for module in modules}
     findings: list[dict] = []
+
+    dependency_visibility = rules.get("dependency_visibility", {})
+    api_severity = dependency_visibility.get("api_project_dependency_severity")
+    approved_api_edges = {
+        (item["source"], item["target"])
+        for item in dependency_visibility.get("allowed_api_project_dependencies", [])
+    }
+    if api_severity:
+        for module in modules:
+            for dependency in module["project_dependency_configurations"]:
+                edge = (module["path"], dependency["target"])
+                if dependency["test_only"] or not is_api_configuration(dependency["configuration"]):
+                    continue
+                if edge not in approved_api_edges:
+                    add_finding(
+                        findings,
+                        rules,
+                        "unapproved-api-project-dependency",
+                        api_severity,
+                        module["path"],
+                        dependency["target"],
+                        f"Project dependency uses `{dependency['configuration']}` without an exact reviewed public-contract allowance; default to implementation.",
+                        module["build_file"],
+                    )
+
+    native_framework = rules.get("native_framework", {})
+    exported_dependency_severity = native_framework.get("exported_dependency_severity")
+    if exported_dependency_severity:
+        for module in modules:
+            for dependency in module["project_dependency_configurations"]:
+                if dependency["test_only"] or not is_export_configuration(dependency["configuration"]):
+                    continue
+                add_finding(
+                    findings,
+                    rules,
+                    "native-exported-project-dependency",
+                    exported_dependency_severity,
+                    module["path"],
+                    dependency["target"],
+                    "Kotlin/Native framework exports a project dependency; keep implementation modules behind an app-owned Swift bridge unless this exact library API is intentional.",
+                    module["build_file"],
+                )
+    native_patterns = (
+        ("native-export-flag", native_framework.get("export_flag_severity"), NATIVE_EXPORT_FLAG_RE, "export = true"),
+        ("transitive-native-export", native_framework.get("transitive_export_severity"), TRANSITIVE_EXPORT_RE, "transitiveExport = true"),
+        ("disabled-native-compiler-phase", native_framework.get("disabled_phase_severity"), DISABLED_PHASE_RE, "-Xdisable-phases"),
+    )
+    if any(severity for _, severity, _, _ in native_patterns):
+        for path in find_native_configuration_files(root, ignored):
+            text = strip_gradle_comments(path.read_text(encoding="utf-8", errors="replace"))
+            relative = path.relative_to(root).as_posix()
+            source_module = owner_for(path, root, by_dir)
+            source = source_module["path"] if source_module else relative
+            for rule_id, severity, pattern, target in native_patterns:
+                if severity and pattern.search(text):
+                    evidence = {
+                        "native-export-flag": "Build configuration enables a broad native export flag; prefer an explicit narrow Swift bridge and implementation dependencies.",
+                        "transitive-native-export": "Transitive Kotlin/Native export broadens the entire Swift-facing dependency surface.",
+                        "disabled-native-compiler-phase": "Build configuration disables Kotlin/Native compiler phases; do not make linker diagnostic workarounds permanent.",
+                    }[rule_id]
+                    add_finding(findings, rules, rule_id, severity, source, target, evidence, relative)
 
     conventions = rules.get("conventions", {})
     root_settings = next((root / name for name in ("settings.gradle.kts", "settings.gradle") if (root / name).is_file()), None)

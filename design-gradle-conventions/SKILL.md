@@ -1,6 +1,6 @@
 ---
 name: design-gradle-conventions
-description: Analyze repeated Gradle configuration and create or refine project-specific convention plugins for Kotlin Multiplatform, Android, JVM, feature-layer, core, utility, and test-support modules. Use when extracting build logic from duplicated build.gradle(.kts) files, defining plugins applied to domain/data/navigation/UI/optional shared-UI/test modules, adopting an included build or build-logic project, or making new modularized modules reuse the target codebase’s existing libraries and versions.
+description: Analyze repeated Gradle configuration and create or refine project-specific convention plugins for Kotlin Multiplatform, Android, JVM, feature-layer, core, utility, and test-support modules. Use when extracting build logic from duplicated build.gradle(.kts) files, defining plugins applied to domain/data/navigation/UI/optional shared-UI/test modules, adopting an included build or build-logic project, preserving narrow dependency visibility/native framework exports, or making new modularized modules reuse the target codebase’s existing libraries and versions.
 ---
 
 # Design Gradle Conventions
@@ -36,6 +36,10 @@ A module should advertise what it is and which exceptional capabilities it needs
 - one base plugin plus a small typed extension whose flags map one-to-one to independent capabilities.
 
 Prefer separate plugins when capabilities have independent consumers or expensive side effects. Prefer a typed extension when nearly every module uses the same base and combinations are stable.
+
+Default dependencies added by conventions and leaf-module scaffolds to `implementation`. Permit `api` only for a reviewed public Kotlin signature that exposes the dependency type. An optional aggregation root may explicitly re-export its own production children when its documented purpose is an app-facing Kotlin facade; keep that policy out of the base convention and record the exact allowed edges.
+
+For KMP Apple frameworks, keep framework creation separate from ordinary KMP library setup. Do not make dependency export, transitive export, or disabled compiler phases a base-plugin default. Application frameworks should expose an app-owned Swift bridge; use `$audit-kotlin-native-framework` to establish and verify its generated-header baseline.
 
 ## Preserve the target stack
 
@@ -99,6 +103,8 @@ Require:
 - no version duplication outside the catalog unless documented;
 - no test-support leak into production runtime;
 - no domain pollution from UI/data capabilities;
+- no unreviewed `api` project edges, dependency exports, transitive native export, or permanent `-Xdisable-phases` flags;
+- a generated-header audit for every framework-producing representative module in scope;
 - stable source sets, targets, resource visibility, code generation, and test tasks;
 - clear failures when a required alias or plugin artifact is missing.
 

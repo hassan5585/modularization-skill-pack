@@ -6,8 +6,9 @@
 2. Default layer direction
 3. Package mapping
 4. Cross-feature policy
-5. Exceptions
-6. CI adoption
+5. Dependency visibility and native frameworks
+6. Exceptions
+7. CI adoption
 
 ## 1. Rule model
 
@@ -31,6 +32,17 @@ Configure `required_test_modules` for approved shared foundations. Feature-speci
 Use `required_feature_layers_by_feature` for deliberately partial feature shapes. Exact feature entries override `required_feature_layers`; `"*"` is the mapping fallback. For example, `{"profile": ["domain", "ui"], "payments": ["domain", "data"]}` verifies the approved architecture without manufacturing empty layers.
 
 `direct_project_imports` is optional. Enable it only when the repository forbids imports obtained through another module’s public `api` dependency; otherwise leave its severity null.
+
+`dependency_visibility` is a separate public-contract guard. Set
+`api_project_dependency_severity` to review every production project dependency
+using `api` or a source-set helper such as `commonMainApi`. Add exact
+`source`/`target`/`reason` objects only when the source module’s public Kotlin
+signature intentionally exposes a type from the target module.
+
+For KMP Apple-framework projects, configure all `native_framework` severities.
+The checker scans module build files and conventional build-logic/plugin Kotlin
+sources for exported project dependencies, `export = true`,
+`transitiveExport = true`, and `-Xdisable-phases`.
 
 ## 2. Default layer direction
 
@@ -103,7 +115,48 @@ schema-v1 rule files that do not yet contain `shared-ui` entries. When such a
 file omits `cross_feature.allowed_role_edges.ui`, the compatible default permits
 only `ui -> shared-ui`; an explicitly configured `ui` list remains authoritative.
 
-## 5. Exceptions
+## 5. Dependency visibility and native frameworks
+
+Recommended strict configuration:
+
+```json
+{
+  "dependency_visibility": {
+    "api_project_dependency_severity": "error",
+    "allowed_api_project_dependencies": [
+      {
+        "source": ":published:contract",
+        "target": ":core:domain",
+        "reason": "Published Contract exposes CoreValue in its documented Kotlin API."
+      }
+    ]
+  },
+  "native_framework": {
+    "exported_dependency_severity": "error",
+    "export_flag_severity": "error",
+    "transitive_export_severity": "error",
+    "disabled_phase_severity": "error"
+  }
+}
+```
+
+Use `implementation` for app wiring and leaf dependencies. An optional feature
+aggregation root may use `api` for its own production children when it is the
+documented app-facing Kotlin facade; list each edge with its reason. `api` is
+not required for DI discovery and does not itself authorize an Apple framework
+dependency export. For an application framework, keep Swift on an app-owned
+bridge and keep feature, repository, ViewModel, graph, and third-party modules
+behind it.
+
+Static rules cannot prove the generated Swift/Objective-C surface. Run
+`$audit-kotlin-native-framework` against an existing built framework with
+repository-owned header thresholds and required/forbidden symbol patterns.
+Reusable published libraries may need a deliberate dependency export; encode a
+narrow exception only after documenting the consumer contract and auditing the
+generated header. Transitive export and disabled compiler phases are hard rules
+and cannot be suppressed.
+
+## 6. Exceptions
 
 An exception should look like:
 
@@ -126,13 +179,14 @@ Requirements:
 - accountable owner;
 - objective removal condition.
 
-Exceptions cannot suppress the shared-UI hard-boundary rule IDs. In particular,
+Exceptions cannot suppress the shared-UI hard-boundary rule IDs, transitive
+native export, or disabled native compiler phases. In particular,
 `shared-ui -> shared-ui` is never an accepted migration state; compose providers
 in consumer UI or move a genuinely generic primitive to core UI.
 
 Exceptions should still appear in reports as suppressed debt. Expiry dates may be added if the team has a process that enforces them.
 
-## 6. CI adoption
+## 7. CI adoption
 
 Adopt in stages:
 
@@ -141,5 +195,6 @@ Adopt in stages:
 3. Fail CI on new errors.
 4. Decide whether warnings fail CI.
 5. Run Gradle compile/tests after the static checker.
+6. For KMP Apple frameworks, audit the generated device framework before release verification.
 
 Do not hide all baseline violations with broad path or rule exclusions. The goal is to prevent regression while paying down known debt.

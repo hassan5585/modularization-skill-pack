@@ -1,4 +1,4 @@
 interface:
   display_name: "Audit Kotlin Architecture"
-  short_description: "Inventory Kotlin boundaries and dependencies"
-  default_prompt: "Use $audit-kotlin-architecture to inspect this repository and propose evidence-backed module boundaries."
+  short_description: "Inventory Kotlin and native boundaries"
+  default_prompt: "Use $audit-kotlin-architecture to inspect this repository and propose evidence-backed module, public dependency, and native framework boundaries."

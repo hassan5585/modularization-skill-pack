@@ -1,4 +1,4 @@
 interface:
   display_name: "Verify Kotlin Modules"
-  short_description: "Check module shape and dependency boundaries"
-  default_prompt: "Use $verify-kotlin-modules to validate this repository’s layered module architecture and migration checkpoints."
+  short_description: "Check modules, public APIs, and exports"
+  default_prompt: "Use $verify-kotlin-modules to validate layered modules, public project dependencies, and Kotlin/Native build boundaries."

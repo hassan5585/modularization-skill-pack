@@ -1,6 +1,6 @@
 ---
 name: modularize-kotlin-codebase
-description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency-boundary cleanup, KMP/Android/JVM module planning, convention-plugin extraction, or coordinating the sibling audit, Gradle-convention, feature-migration, and verification skills.
+description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency/public-API cleanup, KMP native-framework boundary planning, convention-plugin extraction, or coordinating the sibling audit, Gradle-convention, feature-migration, native-framework, and verification skills.
 ---
 
 # Modularize Kotlin Codebase
@@ -15,6 +15,7 @@ Use these sibling skills in order when they are installed:
 2. `$design-gradle-conventions` — extract repeated Gradle setup into project-specific convention plugins.
 3. `$migrate-kotlin-feature` — scaffold and migrate one approved vertical slice.
 4. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
+5. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
 
 If a sibling is unavailable, follow the same phase in this skill and use its artifacts only when present. Do not invent findings that require repository inspection.
 
@@ -41,6 +42,8 @@ Preserve these invariants unless the user explicitly changes them:
 - An optional feature `shared-ui` owns provider-specific UI reused by feature UI modules. It uses normal UI internals, sits below consumers, and never depends on another shared-UI module.
 - A test-support module contains reusable fakes, fixtures, and test builders; it is never on a production runtime path.
 - Cross-feature sharing moves only after a second real consumer appears or a stable product concept is clearly app-wide.
+- Leaf dependencies default to `implementation`; every `api` edge represents a reviewed public Kotlin contract. An optional feature aggregation root may re-export its own production children only when it is the documented app-facing Kotlin facade.
+- An application’s Kotlin/Native framework keeps one narrow app-owned Swift bridge and does not export implementation dependency modules.
 
 Read [references/architecture-blueprint.md](references/architecture-blueprint.md) before designing the target graph. Read [references/migration-playbook.md](references/migration-playbook.md) before making changes. Read [references/chunk-tracking.md](references/chunk-tracking.md) before the first repository edit. Read [references/artifact-contract.md](references/artifact-contract.md) when creating or consuming `.modularization` artifacts.
 
@@ -99,6 +102,8 @@ Keep app-only signing, secrets, distribution, environment files, and release aut
 
 Compile the build logic and migrate one existing low-risk module to prove it before scaffolding the full target graph. Record the representative module, its before/after plugins, targets/source sets, dependencies, generated outputs, resources, and test tasks. Convention creation is not complete while new modules still copy raw platform configuration instead of applying the approved convention plugins.
 
+For native framework output, keep export behavior out of ordinary KMP/feature conventions. Never make `api`, dependency export, transitive export, or `-Xdisable-phases` the default path to Swift visibility. Establish the intended bridge and generated-header baseline with `$audit-kotlin-native-framework`.
+
 ## Phase 3: Prepare foundations
 
 Introduce only foundations required by the first feature:
@@ -128,6 +133,8 @@ Invoke `$migrate-kotlin-feature` and migrate dependency-first:
 6. UI and presentation state.
 7. DI registration, app aggregation, and entry-point wiring.
 8. Old code deletion only after all references have moved and checks pass.
+
+For KMP Apple-framework projects, audit an existing framework after any batch that changes public declarations, dependency visibility, native interop, or app-shell wiring. Generate a debug device framework only when the current artifact is stale.
 
 Before each numbered batch, start its ledger chunk. After the batch, record exact command results, changed paths, decisions, risks, and adapters, then complete the chunk. Keep only one chunk `in_progress`.
 
@@ -163,6 +170,8 @@ Completion requires:
 - all baseline checks pass or only documented pre-existing failures remain;
 - no compatibility adapter, duplicate implementation, or stale monolith source remains untracked;
 - architecture documentation and CI checks describe the new structure.
+- all `api` project edges are explicitly justified and the configured dependency-visibility check is clean;
+- KMP Apple-framework projects pass the configured native build/static rules and generated-header audit without disabled optimization phases;
 - every completed work chunk has verification evidence or a specific reason no executable check exists;
 - no required convention-plugin or testing-foundation chunk was skipped merely because hand-written Gradle configuration compiled;
 - `.modularization/work-state.json` validates and has no open temporary adapter at final completion.

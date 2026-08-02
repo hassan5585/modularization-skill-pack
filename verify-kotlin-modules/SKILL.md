@@ -1,6 +1,6 @@
 ---
 name: verify-kotlin-modules
-description: Validate a modular Kotlin/Gradle architecture with feature aggregation modules and domain, data, navigation, UI, optional feature shared-UI, and test-support layers. Use after scaffolding or migrating modules, in architecture reviews, or in CI to check module shape, settings registration, project dependency direction, shared-UI provider/consumer rules, source-import boundaries, feature coupling, production-to-test leaks, dependency cycles, source-set placement, and appropriate Gradle verification tasks.
+description: Validate a modular Kotlin/Gradle architecture with feature aggregation modules and domain, data, navigation, UI, optional feature shared-UI, and test-support layers. Use after scaffolding or migrating modules, in architecture reviews, or in CI to check module shape, settings registration, project dependency direction and visibility, native export/compiler flags, shared-UI provider/consumer rules, source-import boundaries, feature coupling, production-to-test leaks, dependency cycles, source-set placement, and appropriate Gradle verification tasks.
 ---
 
 # Verify Kotlin Modules
@@ -23,11 +23,15 @@ modules or the provider’s aggregation root.
 These shared-UI boundaries are enforced for existing schema-v1 rules files as
 well; a rules file created before the pattern does not silently bypass them.
 
-Configure the approved convention included build, every required registered plugin id, and role-to-plugin requirements. Replace every `example.*` value in the asset; never run CI with placeholders. With `validate_included_build_plugins` enabled, the checker also verifies the included build's settings registration, static plugin registrations, implementation-class source files, and duplicate ids. Configure shared test modules only when the plan requires them.
+Configure the approved convention included build, every required registered plugin id, and role-to-plugin requirements. Replace every `example.*` value and remove or adapt every example API allowance in the asset; never run CI with placeholders. With `validate_included_build_plugins` enabled, the checker also verifies the included build's settings registration, static plugin registrations, implementation-class source files, and duplicate ids. Configure shared test modules only when the plan requires them.
 
 Use `required_feature_layers_by_feature` when features intentionally have different shapes. An exact feature key overrides `required_feature_layers`; `"*"` supplies a default. An explicit empty list documents that a feature has no mandatory child layers. Do not create empty data, navigation, UI, or test modules merely to satisfy a global template.
 
 Leave `direct_project_imports.severity` null unless the target architecture requires every imported module to be a direct Gradle dependency. Enabling it in projects that intentionally expose transitive `api` contracts creates noise rather than a valid boundary rule.
+
+Configure `dependency_visibility.api_project_dependency_severity` to review every production project dependency using `api` or a source-set helper ending in `Api`. Add only exact `source`/`target` allowances with a reason after confirming that a public Kotlin signature requires the dependency type or that an optional aggregation root is the documented app-facing Kotlin facade for its own children. Default other new edges to `implementation`.
+
+For KMP Apple frameworks, enable all `native_framework` severities. The checker rejects project dependency exports, broad export flags, transitive export, and permanent `-Xdisable-phases` configuration. Use an exact exception only for a deliberately published library dependency export; disabled compiler phases and transitive export are hard rules. Run `$audit-kotlin-native-framework` separately against the generated artifact.
 
 ## Run static verification
 
@@ -54,6 +58,7 @@ The checker validates:
 - required shared test-support modules;
 - required convention included builds, their registered subprojects/plugin implementations, and per-role convention plugin use;
 - optional direct-project dependency coverage for production imports;
+- unapproved public `api` project dependencies and Kotlin/Native dependency export/compiler-phase configuration;
 - explicit, narrow exceptions.
 
 ## Select build checks
@@ -75,7 +80,8 @@ The output is advisory. Prefer tasks proven by CI or `./gradlew tasks` in the ta
 5. feature aggregation checks;
 6. app compile or platform deliverable;
 7. repository lint/static analysis;
-8. broader platform tests when risk warrants them.
+8. generated native framework audit when the project ships one;
+9. broader platform tests when risk warrants them.
 
 ## Review generated and platform behavior
 
@@ -88,12 +94,14 @@ Static imports are insufficient for:
 - iOS/native framework exports and source sets;
 - manifests, service loaders, reflection, and shrinker behavior.
 
-Inspect generated outputs/tasks and run the corresponding compile or packaging checks.
+Inspect generated outputs/tasks and run the corresponding compile or packaging checks. For an Apple framework, inspect the most recent existing header first, then use `$audit-kotlin-native-framework` with repository-owned thresholds and symbol rules. Do not start a release link merely to discover the current surface.
 
 ## Severity policy
 
 - **Error:** forbidden direction, cycle, production-to-test dependency, missing required module, or source import that violates a hard rule.
 - **Error:** a shared-UI module depending on another shared-UI module, a regular feature UI, or a feature aggregation root.
+- **Error:** configured native dependency exports, transitive export, broad export flags, or disabled compiler phases.
+- **Warning/error as configured:** a project `api` edge without an exact reviewed public-contract allowance.
 - **Warning:** cross-feature coupling, ambiguous ownership, unusual platform dependency, or an unconfigured module role.
 - **Info:** migration debt or suggested cleanup that does not break the architecture contract.
 

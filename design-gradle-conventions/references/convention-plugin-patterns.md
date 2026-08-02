@@ -133,6 +133,25 @@ Separate two concerns:
 
 Add shared test foundations only when the dependency graph does not cycle. Keep instrumentation/UI tests separate from portable/common tests. Do not add every feature’s support module globally from a base convention; add it only to the owning test source sets that need it.
 
+### Dependency visibility
+
+Add dependencies with `implementation` by default. A convention may use `api`
+only when the module’s reviewed public Kotlin signatures expose the dependency
+type. An optional aggregation root may explicitly re-export its own production
+children when it is the documented app-facing Kotlin facade; do not hide that
+choice in a base convention. Review the resulting downstream compile graph
+separately from the Apple framework export surface.
+
+### Native frameworks
+
+Keep framework production separate from the ordinary KMP library convention.
+For application frameworks, expose one small app-owned Swift facade and keep
+dependency modules implementation-only. Do not default `framework.export(...)`,
+`export(project(...))`, `export = true`, `transitiveExport = true`, or
+`-Xdisable-phases` in shared build logic. A reusable published framework may
+export a reviewed dependency contract explicitly, but must prove its generated
+header and document the exact exception.
+
 ## 6. Module application matrix
 
 | Role | Base | Typical capabilities |
@@ -164,5 +183,7 @@ For one representative module, compare before and after:
 - code-generation tasks;
 - unit/instrumented/native test tasks;
 - publishing/framework outputs.
+- generated framework header size, Objective-C declarations, and exported symbol set;
+- public project dependency and native export findings;
 
 Only then convert modules of the same role. A convention that compiles but changes target variants or test discovery is not equivalent.

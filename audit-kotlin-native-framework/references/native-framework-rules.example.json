@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "max_header_lines": 1000,
+  "max_objc_declarations": 50,
+  "required_symbol_patterns": [
+    "AppBridge"
+  ],
+  "forbidden_symbol_patterns": [
+    {
+      "label": "ViewModels",
+      "pattern": "ViewModel"
+    },
+    {
+      "label": "Repositories",
+      "pattern": "Repository"
+    },
+    {
+      "label": "Dependency graphs",
+      "pattern": "(?:DependencyGraph|AppGraph|GraphFactory)"
+    }
+  ]
+}
