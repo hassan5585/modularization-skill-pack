@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extract Kotlin Foundations"
+  short_description: "Plan and scaffold core and util foundations"
+  default_prompt: "Use $extract-kotlin-foundations to plan and scaffold the core, util, and test foundations required before migrating features."

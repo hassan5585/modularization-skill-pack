@@ -1,0 +1,4 @@
+interface:
+  display_name: "Extract KMP Platform Boundaries"
+  short_description: "Separate common code from platform APIs"
+  default_prompt: "Use $extract-kmp-platform-boundaries to find platform imports in portable source sets and plan interface or expect/actual extractions."

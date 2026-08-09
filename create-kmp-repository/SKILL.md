@@ -90,9 +90,16 @@ Do not ask about frameworks, module shapes, variants, test libraries, or tooling
 
 Use the installed sibling skills rather than improvising structure:
 
-- `$migrate-kotlin-feature` to add or migrate feature slices.
+- `$scaffold-kotlin-feature` to add new product capabilities (domain/data/navigation/UI and optional shared-ui/test).
+- `$migrate-kotlin-feature` only when extracting behavior from an existing monolith path.
 - `$design-gradle-conventions` to add new build capabilities.
+- `$extract-kmp-platform-boundaries` and `$harden-kotlin-module-apis` when validating or extending the template boundaries.
 - `$verify-kotlin-modules` for architecture enforcement.
 - `$audit-kotlin-native-framework` after public KMP API, framework, SwiftPM, or native dependency changes.
+- `$measure-kotlin-modular-build-performance` when comparing build isolation after structural changes.
+
+The generator installs the full skill pack (all manifest skills plus shared
+`common/` helpers). After generation, run architecture, platform-boundary, and
+API checks against the template when changing module shape.
 
 Apply integrations such as Firebase, analytics, maps, payments, notifications, widgets, deep links, or release uploads only when the user requests them and provides the required product decisions or credentials.

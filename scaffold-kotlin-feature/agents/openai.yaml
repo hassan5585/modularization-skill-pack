@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scaffold Kotlin Feature"
+  short_description: "Create modular feature module skeletons"
+  default_prompt: "Use $scaffold-kotlin-feature to add a new layered feature to this modular repository without moving monolith code."

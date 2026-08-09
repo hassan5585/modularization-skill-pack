@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "max_candidates": 20,
+  "prefer_patterns": [
+    "dependency-inversion",
+    "domain-contract-extraction",
+    "navigation-contract",
+    "app-shell-orchestration"
+  ],
+  "forbidden_patterns": [
+    "shared-ui-chains",
+    "catch-all-core",
+    "catch-all-common"
+  ]
+}

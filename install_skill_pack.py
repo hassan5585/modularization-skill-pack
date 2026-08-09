@@ -43,11 +43,18 @@ def main() -> int:
     if not skills:
         print("error: no skill folders found beside installer", file=sys.stderr)
         return 2
+    common = source_root / "common"
+    extras = [common] if common.is_dir() else []
     conflicts = [destination / skill.name for skill in skills if (destination / skill.name).exists()]
+    if common.is_dir() and (destination / "common").exists():
+        conflicts.append(destination / "common")
     print(f"{'Installing' if options.apply else 'Dry run:'} {len(skills)} skill(s) into {destination}")
     for skill in skills:
         target = destination / skill.name
         print(f"  - {skill.name}{' [exists]' if target.exists() else ''}")
+    for extra in extras:
+        target = destination / extra.name
+        print(f"  - {extra.name}/ (shared helpers){' [exists]' if target.exists() else ''}")
     if not options.apply:
         return 0
     if conflicts:
@@ -61,10 +68,16 @@ def main() -> int:
     try:
         for skill in skills:
             shutil.copytree(skill, staging / skill.name)
+        for extra in extras:
+            shutil.copytree(extra, staging / extra.name)
         destination.mkdir(parents=True, exist_ok=True)
         for skill in skills:
             target = destination / skill.name
             (staging / skill.name).replace(target)
+            installed.append(target)
+        for extra in extras:
+            target = destination / extra.name
+            (staging / extra.name).replace(target)
             installed.append(target)
     except Exception as exc:
         for target in reversed(installed):

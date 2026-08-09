@@ -125,4 +125,19 @@ Before accepting the plan:
 - For KMP Apple frameworks, record the intended Swift API, current header baseline, every dependency export, and every `api` edge that needs public-contract review. Treat `-Xdisable-phases` as diagnostic debt, not architecture.
 - Ensure the target plan uses libraries already present unless a gap is proven.
 
-The audit is complete only when another agent can start one feature migration without rediscovering the repository.
+## Outputs consumed by sibling skills
+
+Extend the written audit/plan so later skills do not re-discover the repository:
+
+- project dependency **visibility** (`implementation` / `api` / test-only / export);
+- platform-import inventory (portable vs android/ios/jvm source sets);
+- public declaration candidates (for `$harden-kotlin-module-apis`);
+- strongly connected components / module cycles (for `$break-kotlin-module-cycles`);
+- shared/foundation consumer evidence (for `$extract-kotlin-foundations`).
+
+Store the machine-readable audit at `.modularization/audit.json` and the reviewed
+plan at `.modularization/plan.json` (also referenced as `module-plan.json` in the
+pack artifact contract).
+
+The audit is complete only when another agent can start foundation extraction or
+one feature migration without rediscovering the repository.

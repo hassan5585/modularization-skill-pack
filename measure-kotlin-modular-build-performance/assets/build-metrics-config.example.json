@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "warmups": 1,
+  "measured_runs": 3,
+  "timeout_seconds": 3600,
+  "environment": {},
+  "scenarios": [
+    {
+      "id": "clean-build",
+      "command": ["./gradlew", "clean", "assemble", "--no-build-cache"]
+    },
+    {
+      "id": "no-change",
+      "command": ["./gradlew", "assemble"]
+    },
+    {
+      "id": "common-domain-change",
+      "command": ["./gradlew", ":core:domain:compileKotlinAndroid", ":app:assembleDebug"]
+    },
+    {
+      "id": "feature-data-change",
+      "command": ["./gradlew", ":feature:orders:data:compileKotlinAndroid", ":app:assembleDebug"]
+    },
+    {
+      "id": "feature-ui-change",
+      "command": ["./gradlew", ":feature:orders:ui:compileKotlinAndroid", ":app:assembleDebug"]
+    },
+    {
+      "id": "convention-plugin-change",
+      "command": ["./gradlew", "-p", "plugins", "build", ":app:assembleDebug"]
+    }
+  ]
+}

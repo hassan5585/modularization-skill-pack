@@ -1,0 +1,4 @@
+interface:
+  display_name: "Harden Kotlin Module APIs"
+  short_description: "Narrow public API and api() edges"
+  default_prompt: "Use $harden-kotlin-module-apis to inventory public declarations and plan api-to-implementation and public-to-internal hardening."

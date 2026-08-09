@@ -103,7 +103,8 @@ class SkillPackTests(unittest.TestCase):
         target = self.temporary / "repository"
         target.mkdir()
         preview = run(PACK / "install_skill_pack.py", "--target", str(target))
-        self.assertIn("Dry run: 7 skill(s)", preview.stdout)
+        self.assertIn("Dry run: 13 skill(s)", preview.stdout)
+        self.assertIn("common/ (shared helpers)", preview.stdout)
         run(PACK / "install_skill_pack.py", "--target", str(target), "--apply")
         for name in json.loads((PACK / "skill-pack.json").read_text())["skills"]:
             self.assertTrue((target / ".agents" / "skills" / name / "SKILL.md").is_file())
