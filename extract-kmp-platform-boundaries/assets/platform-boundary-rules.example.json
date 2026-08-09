@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "portable_source_sets": ["commonMain", "commonTest", "main"],
+  "forbidden_import_prefixes_in_portable": [
+    "android.",
+    "androidx.",
+    "java.",
+    "javax.",
+    "platform.",
+    "cocoapods.",
+    "kotlinx.cinterop"
+  ],
+  "prefer_interface_for": ["repository", "analytics", "permissions", "notifications"],
+  "prefer_expect_actual_for": ["currentTimeMillis", "uuid", "fileSeparator"]
+}

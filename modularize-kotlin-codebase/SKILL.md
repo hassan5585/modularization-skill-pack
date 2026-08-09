@@ -1,6 +1,6 @@
 ---
 name: modularize-kotlin-codebase
-description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency/public-API cleanup, KMP native-framework boundary planning, convention-plugin extraction, or coordinating the sibling audit, Gradle-convention, feature-migration, native-framework, and verification skills.
+description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency/public-API cleanup, KMP native-framework boundary planning, convention-plugin extraction, foundation extraction, cycle remediation, platform boundaries, API hardening, build-performance measurement, or coordinating the sibling modularization skills.
 ---
 
 # Modularize Kotlin Codebase
@@ -9,13 +9,19 @@ Treat modularization as a behavior-preserving migration, not a directory reshuff
 
 ## Required sibling skills
 
-Use these sibling skills in order when they are installed:
+Use these sibling skills when they are installed (typical brownfield order):
 
 1. `$audit-kotlin-architecture` — inventory sources, build configuration, dependencies, and candidate boundaries.
 2. `$design-gradle-conventions` — extract repeated Gradle setup into project-specific convention plugins.
-3. `$migrate-kotlin-feature` — scaffold and migrate one approved vertical slice.
-4. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
-5. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
+3. `$extract-kotlin-foundations` — plan and scaffold core, util, and test foundations required by the pilot.
+4. `$scaffold-kotlin-feature` — create empty feature module skeletons (also used by migration).
+5. `$migrate-kotlin-feature` — move one approved vertical slice into those modules.
+6. `$break-kotlin-module-cycles` — detect and plan edge cuts when a migration is blocked by a cycle.
+7. `$extract-kmp-platform-boundaries` — remove platform leakage from portable source sets.
+8. `$harden-kotlin-module-apis` — narrow `api` edges and public implementation surfaces.
+9. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
+10. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
+11. `$measure-kotlin-modular-build-performance` — optional baseline/completion build metrics.
 
 If a sibling is unavailable, follow the same phase in this skill and use its artifacts only when present. Do not invent findings that require repository inspection.
 
@@ -53,6 +59,7 @@ Read [references/architecture-blueprint.md](references/architecture-blueprint.md
 2. Run the smallest reliable baseline checks. Record pre-existing failures separately.
 3. Create `.modularization/` only when the user has authorized repository changes; otherwise keep reports in a temporary directory.
 4. Copy [assets/modularization.config.example.json](assets/modularization.config.example.json) to `.modularization/config.json` and adapt it after discovery. Never accept placeholders as real decisions.
+5. When the user wants performance evidence, capture a build-metrics baseline with `$measure-kotlin-modular-build-performance` into `.modularization/build-metrics/baseline.json`.
 
 Exit this phase with a known baseline and a list of commands that must remain green.
 
@@ -106,24 +113,33 @@ For native framework output, keep export behavior out of ordinary KMP/feature co
 
 ## Phase 3: Prepare foundations
 
-Introduce only foundations required by the first feature:
+Invoke `$extract-kotlin-foundations`. Consume the accepted audit/plan, review
+`.modularization/foundation-plan.json`, and scaffold only modules required by
+the pilot feature:
 
 - `core:domain` for truly app-wide contracts and models;
 - `core:data` for shared infrastructure rather than feature repositories;
 - `core:navigation` for navigation abstractions and shared route contracts;
 - `core:ui` for the design system and presentation foundations;
 - `feature:<name>:shared-ui` only for reviewed feature-owned reuse; keep generic design-system primitives in `core:ui`;
-- `util:<capability>:domain` plus `real` and optional `ui` for independently reusable cross-cutting services.
+- `util:<capability>:domain` plus `real` and optional `ui` for independently reusable cross-cutting services;
 - a repository-wide test-foundation module for production-independent helpers, plus a downstream-safe core-contract fake module when multiple features need it;
 - feature/utility `test` support modules only when fakes or fixtures have multiple owning-test consumers and the dependency direction is acyclic.
 
-Do not create empty speculative modules. Do not move feature-specific code into `core` as a shortcut.
+Do not create empty speculative modules. Do not move feature-specific code into `core` as a shortcut. Reject high fan-in alone as core ownership evidence.
 
 ## Phase 4: Migrate a pilot feature
 
 Choose a feature that is real but bounded: enough data/UI/navigation behavior to exercise the pattern, without being the most coupled area.
 
-Invoke `$migrate-kotlin-feature` and migrate dependency-first:
+If a planned batch is blocked by a module cycle, invoke `$break-kotlin-module-cycles`,
+apply one reviewed edge cut, re-verify, then resume migration.
+
+If portable source sets contain platform imports, invoke
+`$extract-kmp-platform-boundaries` before or during the affected batch.
+
+Invoke `$migrate-kotlin-feature` (which delegates module creation to
+`$scaffold-kotlin-feature`) and migrate dependency-first:
 
 1. Domain contracts, models, and pure logic.
 2. Test fakes/fixtures needed by domain consumers.
@@ -157,7 +173,10 @@ Avoid horizontal big-bang moves such as extracting every model before any featur
 
 ## Phase 6: Harden and finish
 
-Invoke `$verify-kotlin-modules` for the full repository.
+Invoke `$harden-kotlin-module-apis` to review `api` edges and public
+implementation surfaces, then `$verify-kotlin-modules` for the full repository.
+When a performance baseline was captured in Phase 0, compare a fresh capture with
+`$measure-kotlin-modular-build-performance` (informational — not an architecture error gate).
 
 Completion requires:
 

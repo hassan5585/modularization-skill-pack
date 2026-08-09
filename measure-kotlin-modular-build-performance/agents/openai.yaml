@@ -1,0 +1,4 @@
+interface:
+  display_name: "Measure Modular Build Performance"
+  short_description: "Capture and compare Gradle build metrics"
+  default_prompt: "Use $measure-kotlin-modular-build-performance to capture baseline and post-migration Gradle scenario metrics and compare medians without Gradle Enterprise."

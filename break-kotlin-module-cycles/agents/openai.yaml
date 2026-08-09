@@ -1,0 +1,4 @@
+interface:
+  display_name: "Break Kotlin Module Cycles"
+  short_description: "Detect and plan module cycle cuts"
+  default_prompt: "Use $break-kotlin-module-cycles to detect module dependency cycles and produce a reviewed edge-cut plan without inventing catch-all modules."

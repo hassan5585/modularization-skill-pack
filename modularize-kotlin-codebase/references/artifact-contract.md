@@ -2,6 +2,41 @@
 
 Use JSON with `schema_version: 1`. Treat paths as repository-relative POSIX paths and represent the repository root as `.`. Do not store secrets, absolute developer paths, generated build output, or environment-specific credentials.
 
+## Layout
+
+```text
+.modularization/
+├── config.json
+├── audit.json
+├── plan.json                 # module plan (alias: module-plan.json)
+├── foundation-plan.json
+├── cycle-report.json
+├── api-surface-report.json
+├── platform-boundary-plan.json
+├── work-state.json
+├── worklog.md
+├── receipts/
+└── build-metrics/
+    ├── baseline.json
+    ├── current.json
+    └── comparison.json
+```
+
+## Common envelope
+
+Every skill-written artifact should record when applicable:
+
+- `schema_version` (required, `1`);
+- `repository.root` / `repository.revision`;
+- `generator.skill` / `generator.script` / `generator.version`;
+- `inputs`;
+- observed facts vs inferred `recommendations`;
+- `unresolved` decisions;
+- `gates` (pass/fail/review);
+- `verification` command lists and results when known.
+
+Cross-skill validation helpers live in the pack’s `common/artifact_schema.py`.
+
 ## Configuration
 
 `config.json` records user-approved intent:

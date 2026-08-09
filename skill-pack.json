@@ -1,15 +1,21 @@
 {
   "schema_version": 1,
   "name": "portable-kotlin-modularization",
-  "description": "Skills and standard-library scripts for generating production-ready Kotlin Multiplatform repositories or incrementally splitting existing Android, Kotlin Multiplatform, JVM, and mixed Kotlin/Gradle monoliths into layered feature, optional feature-owned shared-ui, core, utility, and test-support modules with project-specific convention plugins, narrow Kotlin/Native framework boundaries, resumable repository tracking, and architecture verification.",
+  "description": "Thirteen coordinated skills and standard-library scripts for generating production-ready Kotlin Multiplatform repositories or incrementally splitting existing Android, Kotlin Multiplatform, JVM, and mixed Kotlin/Gradle monoliths into layered feature, optional feature-owned shared-ui, core, utility, and test-support modules with project-specific convention plugins, foundation extraction, cycle remediation, platform boundaries, API hardening, build-performance measurement, narrow Kotlin/Native framework boundaries, resumable repository tracking, and architecture verification.",
   "skills": [
     "create-kmp-repository",
     "modularize-kotlin-codebase",
     "audit-kotlin-architecture",
     "design-gradle-conventions",
+    "extract-kotlin-foundations",
+    "scaffold-kotlin-feature",
     "migrate-kotlin-feature",
+    "break-kotlin-module-cycles",
+    "extract-kmp-platform-boundaries",
+    "harden-kotlin-module-apis",
     "audit-kotlin-native-framework",
-    "verify-kotlin-modules"
+    "verify-kotlin-modules",
+    "measure-kotlin-modular-build-performance"
   ],
   "install": {
     "repository_destination": ".agents/skills",

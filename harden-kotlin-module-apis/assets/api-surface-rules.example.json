@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "allowed_api_project_dependencies": [
+    {
+      "source": ":feature:orders",
+      "target": ":feature:orders:domain",
+      "reason": "Aggregation root is the app-facing Kotlin facade"
+    }
+  ],
+  "swift_bridge_types": ["IosAppBridge"],
+  "treat_as_generated_path_markers": ["build/generated", "/ksp/", "/generated/"]
+}

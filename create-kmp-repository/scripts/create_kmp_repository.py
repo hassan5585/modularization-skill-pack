@@ -167,6 +167,12 @@ def copy_local_skills(destination: Path) -> list[str]:
             skills_destination / name,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
+    if source_pack and (source_pack / "common").is_dir():
+        shutil.copytree(
+            source_pack / "common",
+            skills_destination / "common",
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
     return names
 
 

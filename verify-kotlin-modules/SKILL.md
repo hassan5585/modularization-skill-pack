@@ -107,6 +107,17 @@ Inspect generated outputs/tasks and run the corresponding compile or packaging c
 
 Do not downgrade errors solely because they predate the migration. Record baseline debt separately and prevent new violations.
 
+## Cross-check modularization artifacts
+
+When present under `.modularization/`, consume or cross-check (do not fail the
+architecture gate solely on performance):
+
+- accepted foundation ownership (`foundation-plan.json`);
+- approved cycle-break decisions (`cycle-report.json` / cycle-break plan);
+- API visibility exceptions (`api-surface-report.json` and rules allowances);
+- platform-boundary rules / plan;
+- build-metrics comparison as **informational** evidence only.
+
 ## Completion report
 
 Report:
@@ -117,6 +128,7 @@ Report:
 - unverified platform/generated-code risks;
 - exceptions used and why;
 - remaining adapters or monolith files;
-- whether the migrated feature and full modularization phase satisfy their definition of done.
+- whether the migrated feature and full modularization phase satisfy their definition of done;
+- optional performance comparison notes when `.modularization/build-metrics/` exists.
 
 Verification is complete only when the actual build graph and source graph agree with the intended architecture.

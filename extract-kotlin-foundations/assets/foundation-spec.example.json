@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "platform": "kmp",
+  "root_package": "com.example",
+  "source_set": "commonMain",
+  "build_file_name": "build.gradle.kts",
+  "modules": [
+    {
+      "path": ":core:domain",
+      "package": "com.example.core.domain",
+      "kind": "core",
+      "plugins": ["alias(libs.plugins.example.core.domain)"],
+      "dependencies": []
+    },
+    {
+      "path": ":core:data",
+      "package": "com.example.core.data",
+      "kind": "core",
+      "plugins": ["alias(libs.plugins.example.core.data)"],
+      "dependencies": ["implementation(project(\":core:domain\"))"]
+    },
+    {
+      "path": ":core:navigation",
+      "package": "com.example.core.navigation",
+      "kind": "core",
+      "plugins": ["alias(libs.plugins.example.core.navigation)"],
+      "dependencies": ["api(project(\":core:domain\"))"]
+    },
+    {
+      "path": ":core:ui",
+      "package": "com.example.core.ui",
+      "kind": "core",
+      "plugins": ["alias(libs.plugins.example.core.ui)"],
+      "dependencies": ["implementation(project(\":core:domain\"))"]
+    },
+    {
+      "path": ":util:platform:domain",
+      "package": "com.example.util.platform.domain",
+      "kind": "util",
+      "plugins": ["alias(libs.plugins.example.util.domain)"],
+      "dependencies": []
+    },
+    {
+      "path": ":util:platform:real",
+      "package": "com.example.util.platform.real",
+      "kind": "util",
+      "plugins": ["alias(libs.plugins.example.util.real)"],
+      "dependencies": ["implementation(project(\":util:platform:domain\"))"]
+    },
+    {
+      "path": ":test",
+      "package": "com.example.test",
+      "kind": "test",
+      "plugins": ["alias(libs.plugins.example.test.support)"],
+      "dependencies": []
+    }
+  ]
+}

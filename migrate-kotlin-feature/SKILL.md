@@ -34,26 +34,33 @@ Register these modules in settings and consume them only from test source sets/c
 
 ## Scaffold the target shape
 
+**Delegate scaffolding to `$scaffold-kotlin-feature`.** This skill owns source
+moves, compatibility adapters, wiring, and behavior-preserving migration — not
+duplicate feature creation. Prefer the sibling skill’s scripts; the local
+`scripts/scaffold_feature.py` is a compatibility shim that forwards to
+`scaffold-kotlin-feature` when both are installed.
+
 Preview:
 
 ```bash
-python3 scripts/scaffold_feature.py --root /path/to/repo --spec /path/to/feature-spec.json
+python3 ../scaffold-kotlin-feature/scripts/scaffold_feature.py \
+  --root /path/to/repo --spec /path/to/feature-spec.json
 ```
 
-Review every build file and dependency, then apply:
+Review every build file and dependency, then apply (optional idempotent settings
+registration):
 
 ```bash
-python3 scripts/scaffold_feature.py --root /path/to/repo --spec /path/to/feature-spec.json --apply
+python3 ../scaffold-kotlin-feature/scripts/scaffold_feature.py \
+  --root /path/to/repo --spec /path/to/feature-spec.json --register-settings --apply
 ```
 
-The script creates module build files and source roots but does not edit
-`settings.gradle*`, app aggregation, DI, or navigation. Apply those edits
-deliberately because their syntax is project-specific. It maps the Gradle
-`shared-ui` name to a valid Kotlin package suffix such as `sharedui` and rejects
-obvious shared-UI dependency inversions. Put feature test-support dependencies
-in each layer’s `test_dependencies`; the scaffold renders them into `commonTest`
-for KMP or expects explicit `testImplementation`-style expressions for
-Android/JVM.
+Example specs live under `scaffold-kotlin-feature/assets/` (copies retained here
+for older docs). The scaffolder maps Gradle `shared-ui` to package suffix
+`sharedui` and rejects shared-UI chains and production→test edges. Put feature
+test-support dependencies in each layer’s `test_dependencies`. When cycle or API
+plans under `.modularization/` affect the feature, apply those reviewed decisions
+before deleting the old path.
 
 ## Migration order
 
