@@ -22,6 +22,7 @@ Use these sibling skills when they are installed (typical brownfield order):
 9. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
 10. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
 11. `$measure-kotlin-modular-build-performance` — optional baseline/completion build metrics.
+12. `$migrate-to-navigation3` — **optional modernization only when Navigation 3 migration is explicitly requested**; not part of default modularization order. Greenfield `$create-kmp-repository` apps already use Navigation 3.
 
 If a sibling is unavailable, follow the same phase in this skill and use its artifacts only when present. Do not invent findings that require repository inspection.
 

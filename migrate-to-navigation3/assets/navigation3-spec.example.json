@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "generator": {
+    "skill": "migrate-to-navigation3",
+    "script": "migrate_navigation3.py",
+    "version": "1"
+  },
+  "repository": {
+    "root": ".",
+    "revision": null
+  },
+  "inputs": {
+    "audit": ".modularization/navigation3-audit.json"
+  },
+  "project": {
+    "platform": "kmp",
+    "compose_variant": "multiplatform",
+    "source_sets": ["commonMain", "androidMain", "iosMain"],
+    "navigation_coordinates": "jetbrains"
+  },
+  "route_model": {
+    "style": "typed",
+    "existing_base_type": {
+      "name": "AppRoute",
+      "package": "com.example.core.navigation",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/AppRoute.kt",
+      "implements_nav_key": false
+    },
+    "contract_type": "AppRoute",
+    "contract_import": "com.example.core.navigation.AppRoute",
+    "requires_string_to_typed_phase": false,
+    "serialization": {
+      "uses_kotlinx_serialization": true,
+      "polymorphic_registration_required": true
+    }
+  },
+  "navigator": {
+    "module_path": ":core:navigation",
+    "module_directory": "core/navigation",
+    "package": "com.example.core.navigation",
+    "source_set": "commonMain",
+    "interface_name": "Navigator",
+    "existing_navigator": {
+      "name": "Navigator",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/Navigator.kt",
+      "action": "reuse-and-extend"
+    },
+    "apis": {
+      "navigate": true,
+      "back": true,
+      "navigate_up": false,
+      "launch_single_top": true,
+      "pop_up_to": true,
+      "current_route_flow": true,
+      "previous_route_flow": true,
+      "transient_results": true,
+      "readiness": false,
+      "deep_link_routing": true,
+      "graph_view_model_scope": true,
+      "entry_view_model_scope": true,
+      "reset_session": false
+    },
+    "files": {
+      "navigator": "Navigator.kt",
+      "nav_options": "NavOptions.kt",
+      "recording_fake": "RecordingNavigator.kt",
+      "recording_fake_module": ":test:core"
+    }
+  },
+  "hosts": [
+    {
+      "path": "composeApp/src/commonMain/kotlin/com/example/app/MainScreen.kt",
+      "style": "nav_host",
+      "start_route": "HomeRoute",
+      "nested_graphs": true,
+      "dialogs": true,
+      "bottom_sheets": false,
+      "animations": true
+    }
+  ],
+  "back_stack": {
+    "model": "single",
+    "multiple_stacks": false,
+    "top_level_selection": false,
+    "nested_flow_normalization": true,
+    "process_death_restoration": true
+  },
+  "dependencies": {
+    "navigation2": [
+      "org.jetbrains.androidx.navigation:navigation-compose"
+    ],
+    "navigation3_recommended": [
+      "org.jetbrains.androidx.navigation3:navigation3-ui"
+    ],
+    "resolve_versions_from": "repository_catalog_or_official_guidance"
+  },
+  "migration_phases": [
+    "audit",
+    "plan",
+    "string_to_typed_if_needed",
+    "extract_navigator",
+    "nav2_backed_implementation",
+    "atomic_host_cutover",
+    "remove_nav2",
+    "verify"
+  ],
+  "gates": {
+    "unsupported_scope": "pass",
+    "route_identity_stable": "review",
+    "navigator_module_exists": "pass",
+    "plan_reviewed": "review"
+  },
+  "unresolved": [],
+  "observed": {},
+  "recommendations": [
+    "Implement NavKey on AppRoute before host cutover.",
+    "Keep Navigation 2 until ViewModels use Navigator only.",
+    "Prefer official Navigation 3 entry decorators for saveable state."
+  ],
+  "verification": [
+    "python3 scripts/migrate_navigation3.py check --root . --spec .modularization/navigation3-spec.json",
+    "Compile navigation module and app hosts",
+    "Run navigation unit tests with RecordingNavigator"
+  ]
+}

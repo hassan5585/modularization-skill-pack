@@ -1,11 +1,12 @@
 # Portable Kotlin modularization skill pack
 
-Thirteen coordinated skills generate production-ready Kotlin Multiplatform
+Fourteen coordinated skills generate production-ready Kotlin Multiplatform
 repositories or orchestrate, audit, design, extract foundations, scaffold and
-migrate features, break module cycles, separate platform boundaries, harden
-APIs, measure build performance, and verify an incremental layered modularization
-of Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repositories. The
-pack supports optional feature-owned `shared-ui` modules without permitting
+migrate features, optionally migrate Compose Navigation 2 to Navigation 3,
+break module cycles, separate platform boundaries, harden APIs, measure build
+performance, and verify an incremental layered modularization of Android,
+Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repositories. The pack
+supports optional feature-owned `shared-ui` modules without permitting
 shared-UI dependency chains. For KMP projects it also guards the Kotlin/Native
 dependency and Swift export surface, including generated framework headers.
 Existing-project workflows preserve the target project’s libraries and generate
@@ -23,6 +24,7 @@ Existing repository
   -> design-gradle-conventions
   -> extract-kotlin-foundations
   -> migrate-kotlin-feature  (scaffolds via scaffold-kotlin-feature)
+  -> migrate-to-navigation3  (optional; only when Nav3 migration is requested)
   -> break-kotlin-module-cycles
   -> extract-kmp-platform-boundaries
   -> harden-kotlin-module-apis
@@ -52,6 +54,7 @@ destructive or irreversible steps.
 | Only a plan / inventory, no file moves | `$audit-kotlin-architecture` | optional `$measure-kotlin-modular-build-performance` |
 | One new feature skeleton in a modular repo | `$scaffold-kotlin-feature` | `$verify-kotlin-modules` |
 | To pull one existing feature out of the monolith | `$migrate-kotlin-feature` | `$break-kotlin-module-cycles`, `$verify-kotlin-modules` |
+| To migrate Compose Navigation 2 → 3 | `$migrate-to-navigation3` | `$verify-kotlin-modules` (after cutover) |
 | To fix feature↔feature or layer cycles | `$break-kotlin-module-cycles` | `$verify-kotlin-modules` |
 | To clean Android/iOS leaks out of `commonMain` | `$extract-kmp-platform-boundaries` | `$verify-kotlin-modules` |
 | To shrink `api` edges / public Kotlin surface | `$harden-kotlin-module-apis` | `$audit-kotlin-native-framework` (if iOS) |
@@ -302,7 +305,27 @@ python3 verify-kotlin-modules/scripts/check_architecture.py \
 
 ---
 
-### 14. Common multi-skill playbooks (pick one goal)
+### 14. Migrate Compose Navigation 2 to Navigation 3
+
+Use only when Navigation 3 migration is **explicitly** requested. Greenfield
+apps from `$create-kmp-repository` already use Navigation 3.
+
+**Agent prompt:**
+
+> Use `$migrate-to-navigation3` on this repository. Run `audit` and `plan`, stop
+> for review of `.modularization/navigation3-spec.json`, then scaffold the
+> app-owned Navigator (preview first). Do not rewrite NavHost automatically.
+> Preserve route identity; use our existing route base type or `NavKey` — do not
+> invent a `Destination` type. After ViewModels use Navigator, plan an atomic
+> NavDisplay cutover and run `check`.
+
+**What you get:** inventory of Nav2 usage, a reviewed migration spec, optional
+Navigator/options/recording-fake scaffold, and a post-migration residual check.
+Kotlin host rewrites stay agent-driven.
+
+---
+
+### 15. Common multi-skill playbooks (pick one goal)
 
 **“We have a monolith and want a pilot only.”**
 
@@ -350,7 +373,7 @@ $verify-kotlin-modules
 
 ---
 
-### 15. What *not* to ask these skills to do
+### 16. What *not* to ask these skills to do
 
 These skills **preserve** the target project’s UI, DI, networking, persistence,
 navigation, serialization, and test stack unless you explicitly request a
@@ -412,6 +435,7 @@ to public declarations, dependency visibility, or native interop.
 | `extract-kotlin-foundations` | Plan/scaffold core, util, and test foundations for the pilot |
 | `scaffold-kotlin-feature` | Create empty layered feature modules in a modular repo |
 | `migrate-kotlin-feature` | Move one real feature slice into those modules |
+| `migrate-to-navigation3` | Audit/plan/scaffold/check Compose Navigation 2 → 3 migration |
 | `break-kotlin-module-cycles` | Detect cycles and plan reviewed edge cuts |
 | `extract-kmp-platform-boundaries` | Separate portable common code from platform implementations |
 | `harden-kotlin-module-apis` | Narrow public Kotlin surface and accidental `api` edges |

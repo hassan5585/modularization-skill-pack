@@ -21,6 +21,9 @@ ARTIFACT_KINDS: dict[str, set[str]] = {
     "build-metrics-comparison": {"baseline", "current", "comparisons"},
     "move-manifest": {"moves"},
     "feature-spec": {"feature", "layers"},
+    "navigation3-audit": {"project", "routes", "hosts", "findings"},
+    "navigation3-spec": {"project", "route_model", "navigator", "migration_phases"},
+    "navigation3-check": {"findings", "gates", "summary"},
     "generic": set(),
 }
 

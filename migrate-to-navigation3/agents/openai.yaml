@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate to Navigation 3"
+  short_description: "Audit and migrate Compose Navigation 2 to 3"
+  default_prompt: "Use $migrate-to-navigation3 to audit this repository’s Navigation Compose 2 usage, produce a navigation3-spec, scaffold an app-owned Navigator if needed, and plan a safe cutover to Navigation 3 without rewriting hosts automatically."

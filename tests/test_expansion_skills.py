@@ -472,11 +472,12 @@ class BuildMetricsTests(PackTestCase):
 
 
 class ManifestIntegrationTests(PackTestCase):
-    def test_manifest_has_thirteen_unique_skills(self) -> None:
+    def test_manifest_has_fourteen_unique_skills(self) -> None:
         manifest = load_json(PACK / "skill-pack.json")
         skills = manifest["skills"]
-        self.assertEqual(13, len(skills))
-        self.assertEqual(13, len(set(skills)))
+        self.assertEqual(14, len(skills))
+        self.assertEqual(14, len(set(skills)))
+        self.assertIn("migrate-to-navigation3", skills)
         for name in skills:
             self.assertTrue((PACK / name / "SKILL.md").is_file())
             self.assertTrue((PACK / name / "agents" / "openai.yaml").is_file())
