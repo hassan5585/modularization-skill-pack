@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate Compose Resources"
+  short_description: "Move Compose resources without key drift"
+  default_prompt: "Use $migrate-compose-resources to audit resource ownership and plan safe module moves."

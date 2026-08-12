@@ -1,4 +1,4 @@
-"""Tests for the architecture skill-pack expansion (6 new skills + common)."""
+"""Tests for the earlier architecture skill-pack expansion and shared helpers."""
 
 from __future__ import annotations
 
@@ -472,11 +472,11 @@ class BuildMetricsTests(PackTestCase):
 
 
 class ManifestIntegrationTests(PackTestCase):
-    def test_manifest_has_fourteen_unique_skills(self) -> None:
+    def test_manifest_has_twenty_two_unique_skills(self) -> None:
         manifest = load_json(PACK / "skill-pack.json")
         skills = manifest["skills"]
-        self.assertEqual(14, len(skills))
-        self.assertEqual(14, len(set(skills)))
+        self.assertEqual(22, len(skills))
+        self.assertEqual(22, len(set(skills)))
         self.assertIn("migrate-to-navigation3", skills)
         for name in skills:
             self.assertTrue((PACK / name / "SKILL.md").is_file())

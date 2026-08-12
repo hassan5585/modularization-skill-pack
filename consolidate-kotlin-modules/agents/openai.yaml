@@ -1,0 +1,4 @@
+interface:
+  display_name: "Consolidate Kotlin Modules"
+  short_description: "Merge fragmented Kotlin modules safely"
+  default_prompt: "Use $consolidate-kotlin-modules to plan and verify an evidence-backed module consolidation."

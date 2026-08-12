@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -11,6 +12,8 @@ from typing import Iterable
 
 DEFAULT_EXCLUDES = {
     ".git",
+    ".agents",
+    ".codex",
     ".gradle",
     ".idea",
     ".kotlin",
@@ -153,12 +156,14 @@ def is_excluded(path: Path, root: Path, excludes: set[str] | None = None) -> boo
 
 
 def walk_files(root: Path, excludes: set[str] | None = None) -> Iterable[Path]:
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        if is_excluded(path, root, excludes):
-            continue
-        yield path
+    banned = excludes or DEFAULT_EXCLUDES
+    for current, directories, files in os.walk(root, topdown=True, followlinks=False):
+        directories[:] = sorted(directory for directory in directories if directory not in banned)
+        current_path = Path(current)
+        for name in sorted(files):
+            path = current_path / name
+            if path.is_file() and not is_excluded(path, root, banned):
+                yield path
 
 
 def module_path_for(build_file: Path, root: Path) -> str:
@@ -190,6 +195,9 @@ def discover_modules(root: Path, excludes: set[str] | None = None) -> list[dict]
             configuration = match.group(1)
             expression = match.group(2)
             lower = configuration.lower()
+            context = text[max(0, match.start() - 600) : match.start()]
+            source_set_matches = re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*(?:Main|Test))\b", context)
+            source_set_context = source_set_matches[-1].lower() if source_set_matches else ""
             if not any(
                 lower == suffix or lower.endswith(suffix)
                 for suffix in ("implementation", "api", "compileonly", "runtimeonly", "kapt", "ksp")
@@ -208,7 +216,7 @@ def discover_modules(root: Path, excludes: set[str] | None = None) -> list[dict]
                         targets.append(normalize_project_dependency(dep.group(1), known))
             if not targets:
                 continue
-            bucket = test if "test" in lower else production
+            bucket = test if "test" in lower or "test" in source_set_context else production
             visibility = "api" if lower.endswith("api") or lower == "api" else "implementation"
             if "compileonly" in lower:
                 visibility = "compileOnly"

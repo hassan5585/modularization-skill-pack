@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "feature": "orders",
+  "required_layers": ["domain", "data", "navigation", "ui"],
+  "app_modules": [":composeApp"],
+  "require_app_dependency": true,
+  "require_di": true,
+  "require_navigation": true,
+  "require_serializer_registration": true,
+  "app_entry_patterns": ["ordersNavGraph", "OrdersDestination.serializer()"]
+}

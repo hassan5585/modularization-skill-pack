@@ -1,6 +1,6 @@
 ---
 name: modularize-kotlin-codebase
-description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, shared-UI dependency design, dependency/public-API cleanup, KMP native-framework boundary planning, convention-plugin extraction, foundation extraction, cycle remediation, platform boundaries, API hardening, build-performance measurement, or coordinating the sibling modularization skills.
+description: Orchestrate an incremental modularization of an existing Kotlin/Gradle codebase into feature slices with domain, data, navigation, UI, optional provider-owned shared-UI, and reusable test-support modules, plus core and cross-cutting utility modules. Use for monolith-to-modules migrations, architecture redesigns, feature integration/decoupling, DI/data/persistence/test/resource boundary moves, shared-UI dependency design, dependency/public-API cleanup, KMP native-framework planning, convention/foundation extraction, cycle/platform remediation, build-performance measurement, evidence-backed module consolidation, or coordinating the sibling modularization skills.
 ---
 
 # Modularize Kotlin Codebase
@@ -16,13 +16,21 @@ Use these sibling skills when they are installed (typical brownfield order):
 3. `$extract-kotlin-foundations` — plan and scaffold core, util, and test foundations required by the pilot.
 4. `$scaffold-kotlin-feature` — create empty feature module skeletons (also used by migration).
 5. `$migrate-kotlin-feature` — move one approved vertical slice into those modules.
-6. `$break-kotlin-module-cycles` — detect and plan edge cuts when a migration is blocked by a cycle.
-7. `$extract-kmp-platform-boundaries` — remove platform leakage from portable source sets.
-8. `$harden-kotlin-module-apis` — narrow `api` edges and public implementation surfaces.
-9. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
-10. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
-11. `$measure-kotlin-modular-build-performance` — optional baseline/completion build metrics.
-12. `$migrate-to-navigation3` — **optional modernization only when Navigation 3 migration is explicitly requested**; not part of default modularization order. Greenfield `$create-kmp-repository` apps already use Navigation 3.
+6. `$migrate-kotlin-data-boundaries` — preserve repository, DTO, serializer, mapper, network, and cache behavior during data moves.
+7. `$migrate-kotlin-persistence-boundaries` — preserve Room/SQLDelight/DataStore schemas and platform construction when persistence moves.
+8. `$migrate-kotlin-tests` — move tests/fakes with production ownership and select affected tasks.
+9. `$migrate-compose-resources` — preserve resource identity, variants, ownership, and generated accessors.
+10. `$modularize-kotlin-dependency-injection` — preserve graph, scope, binding, and platform-DI reachability.
+11. `$integrate-kotlin-feature` — complete settings, app, DI, navigation, serializer, and app-shell wiring.
+12. `$decouple-kotlin-features` — remediate undesirable acyclic cross-feature edges and provider shared UI.
+13. `$break-kotlin-module-cycles` — detect and plan edge cuts when a migration is blocked by a cycle.
+14. `$extract-kmp-platform-boundaries` — remove platform leakage from portable source sets.
+15. `$harden-kotlin-module-apis` — narrow `api` edges and public implementation surfaces.
+16. `$verify-kotlin-modules` — enforce module shape, dependency direction, imports, and build checkpoints.
+17. `$audit-kotlin-native-framework` — for KMP Apple frameworks, enforce a narrow Swift-facing header and native build configuration.
+18. `$measure-kotlin-modular-build-performance` — optional baseline/completion build metrics.
+19. `$consolidate-kotlin-modules` — optional evidence-backed remediation when the resulting graph is over-fragmented.
+20. `$migrate-to-navigation3` — **optional modernization only when Navigation 3 migration is explicitly requested**; not part of default modularization order. Greenfield `$create-kmp-repository` apps already use Navigation 3.
 
 If a sibling is unavailable, follow the same phase in this skill and use its artifacts only when present. Do not invent findings that require repository inspection.
 
@@ -151,6 +159,16 @@ Invoke `$migrate-kotlin-feature` (which delegates module creation to
 7. DI registration, app aggregation, and entry-point wiring.
 8. Old code deletion only after all references have moved and checks pass.
 
+Use focused siblings inside those batches rather than improvising fragile
+cross-cutting moves:
+
+- `$migrate-kotlin-data-boundaries` for repository/DTO/serializer/network/cache ownership;
+- `$migrate-kotlin-persistence-boundaries` before moving databases, schemas, drivers, or stored keys;
+- `$migrate-kotlin-tests` in the same batch as changed production ownership;
+- `$migrate-compose-resources` whenever UI/shared-UI resource ownership changes;
+- `$modularize-kotlin-dependency-injection` when graph ownership, scopes, bindings, or platform graphs change;
+- `$integrate-kotlin-feature` after leaf modules compile to close app/DI/navigation wiring.
+
 For KMP Apple-framework projects, audit an existing framework after any batch that changes public declarations, dependency visibility, native interop, or app-shell wiring. Generate a debug device framework only when the current artifact is stale.
 
 Before each numbered batch, start its ledger chunk. After the batch, record exact command results, changed paths, decisions, risks, and adapters, then complete the chunk. Keep only one chunk `in_progress`.
@@ -167,8 +185,10 @@ After the pilot passes verification:
 4. Re-run architecture checks after every feature.
 5. Promote shared code only when evidence shows stable reuse.
 6. Keep shared-UI provider chunks before consumer UI chunks; never create shared-UI chains.
-7. Keep a remaining-files queue; every monolith file must be assigned, intentionally retained, or deleted.
-8. Resume from the ledger rather than repeating completed discovery or moves. Revalidate the repository head and dirty baseline before resuming a blocked or interrupted chunk.
+7. Invoke `$decouple-kotlin-features` for undesirable acyclic feature edges; do not wait for a cycle.
+8. Keep tests and resources in the same ownership batch as their production/provider code.
+9. Keep a remaining-files queue; every monolith file must be assigned, intentionally retained, or deleted.
+10. Resume from the ledger rather than repeating completed discovery or moves. Revalidate the repository head and dirty baseline before resuming a blocked or interrupted chunk.
 
 Avoid horizontal big-bang moves such as extracting every model before any feature works end-to-end.
 
@@ -178,6 +198,9 @@ Invoke `$harden-kotlin-module-apis` to review `api` edges and public
 implementation surfaces, then `$verify-kotlin-modules` for the full repository.
 When a performance baseline was captured in Phase 0, compare a fresh capture with
 `$measure-kotlin-modular-build-performance` (informational — not an architecture error gate).
+If repeatable metrics and ownership evidence show over-fragmentation, plan a
+separate reviewed `$consolidate-kotlin-modules` batch; never fold consolidation
+into ordinary cleanup without that evidence.
 
 Completion requires:
 
@@ -189,6 +212,8 @@ Completion requires:
 - feature-owned resources and platform source sets are in the correct module;
 - all baseline checks pass or only documented pre-existing failures remain;
 - no compatibility adapter, duplicate implementation, or stale monolith source remains untracked;
+- resource keys/variants and persistence versions/schemas/stored keys match their reviewed baselines;
+- feature integration gates pass for settings, app dependencies, DI, navigation, serializers, and required app-shell entries;
 - architecture documentation and CI checks describe the new structure.
 - all `api` project edges are explicitly justified and the configured dependency-visibility check is clean;
 - KMP Apple-framework projects pass the configured native build/static rules and generated-header audit without disabled optimization phases;

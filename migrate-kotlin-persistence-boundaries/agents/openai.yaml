@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate Kotlin Persistence Boundaries"
+  short_description: "Move persistence code without schema drift"
+  default_prompt: "Use $migrate-kotlin-persistence-boundaries to plan a schema-preserving persistence module migration."

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "target_feature": "orders",
+  "target_domain_module": ":feature:orders:domain",
+  "target_data_module": ":feature:orders:data",
+  "shared_model_allowances": [
+    {
+      "path_pattern": "core/data/.*/AddressResponse\\.kt",
+      "reason": "Reviewed multi-feature wire contract."
+    }
+  ],
+  "allowed_data_modules": [":core:data", ":feature:orders:data"]
+}

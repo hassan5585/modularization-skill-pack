@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "approved_framework": "metro",
+  "framework_free_layers": ["domain"],
+  "required_graph_modules": [":composeApp"],
+  "required_platform_source_sets": ["androidMain", "iosMain"],
+  "allowed_mixed_frameworks": [],
+  "provider_allowances": [
+    {
+      "path_pattern": "composeApp/src/.*/PlatformGraph.*\\.kt",
+      "reason": "Runtime platform values require a reviewed factory boundary."
+    }
+  ]
+}

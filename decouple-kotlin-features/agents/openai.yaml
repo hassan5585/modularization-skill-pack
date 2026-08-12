@@ -1,0 +1,4 @@
+interface:
+  display_name: "Decouple Kotlin Features"
+  short_description: "Remove undesirable cross-feature coupling"
+  default_prompt: "Use $decouple-kotlin-features to audit cross-feature dependencies and propose reviewed edge cuts."

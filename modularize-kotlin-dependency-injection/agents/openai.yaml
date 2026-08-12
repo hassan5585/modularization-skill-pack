@@ -1,0 +1,4 @@
+interface:
+  display_name: "Modularize Kotlin Dependency Injection"
+  short_description: "Move DI graphs safely across modules"
+  default_prompt: "Use $modularize-kotlin-dependency-injection to audit and plan the repository DI module boundaries."

@@ -13,6 +13,23 @@ Use JSON with `schema_version: 1`. Treat paths as repository-relative POSIX path
 ├── cycle-report.json
 ├── api-surface-report.json
 ├── platform-boundary-plan.json
+├── feature-integration-audit.json
+├── feature-integration-plan.json
+├── di-boundary-audit.json
+├── di-migration-plan.json
+├── feature-coupling-report.json
+├── feature-decoupling-plan.json
+├── data-boundary-audit.json
+├── data-boundary-plan.json
+├── test-boundary-audit.json
+├── test-migration-plan.json
+├── resource-audit.json
+├── resource-migration-plan.json
+├── persistence-boundary-audit.json
+├── persistence-migration-plan.json
+├── module-consolidation-audit.json
+├── module-consolidation-plan.json
+├── module-consolidation-check.json
 ├── navigation3-audit.json    # optional; migrate-to-navigation3
 ├── navigation3-spec.json
 ├── navigation3-check.json
@@ -118,6 +135,32 @@ combines reviewed overrides with observed Gradle edges. It emits
 endpoints, or forbidden provider dependencies, and sets
 `plan_acceptance.shared_ui_graph` to `pass` only when that list is empty. The
 work tracker refuses to initialize unless this gate passes.
+
+## Focused boundary artifacts
+
+Focused skills preserve evidence that must survive ownership changes:
+
+- feature integration records physical modules, app owners, project edges, and
+  DI/navigation/serializer/app-entry evidence;
+- DI artifacts record detected frameworks, graph/container/binding/provider/
+  scope/multibinding/assisted declarations, graph owners, and preserved keys;
+- coupling artifacts record every production cross-feature edge, import
+  evidence, classification, exact allowance reason, and reviewed cut strategy;
+- data artifacts record component ownership plus wire `@SerialName` and source
+  fingerprints; persistence artifacts separately record versions, schema files,
+  table/column/preference identities, and platform construction concerns;
+- test artifacts record production matches, source-set targets, expected source
+  hashes, support candidates, production-to-test edges, and affected tasks;
+- resource artifacts record type/key, owner, locale/qualifier variant, content
+  hash, generated-accessor consumers, and reviewed moves;
+- consolidation artifacts record evidence, before/simulated graphs, exact module
+  inventories and hashes, incoming edges, concerns, ordered actions, and final
+  retirement checks.
+
+Never treat heuristic ownership as approval. Plan artifacts retain unresolved
+decisions and use `review` gates until a user/agent has checked semantic
+ownership. Wire/resource/schema/stored-key snapshots are invariants unless the
+user explicitly scopes a separate compatibility migration.
 
 ## Move manifests
 

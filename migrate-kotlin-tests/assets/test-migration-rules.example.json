@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "source_set_map": {
+    "commonMain": "commonTest",
+    "androidMain": "androidHostTest",
+    "iosMain": "iosTest",
+    "jvmMain": "jvmTest"
+  },
+  "task_templates": {
+    "commonTest": ["{module}:testAndroidHostTest"],
+    "androidHostTest": ["{module}:testAndroidHostTest"],
+    "iosTest": ["{module}:iosSimulatorArm64Test"],
+    "jvmTest": ["{module}:jvmTest"]
+  },
+  "test_support_modules": [":test", ":test:core"]
+}

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "portable-kotlin-modularization",
-  "description": "Fourteen coordinated skills and standard-library scripts for generating production-ready Kotlin Multiplatform repositories or incrementally splitting existing Android, Kotlin Multiplatform, JVM, and mixed Kotlin/Gradle monoliths into layered feature, optional feature-owned shared-ui, core, utility, and test-support modules with project-specific convention plugins, foundation extraction, cycle remediation, platform boundaries, API hardening, optional Navigation 2-to-3 migration, build-performance measurement, narrow Kotlin/Native framework boundaries, resumable repository tracking, and architecture verification.",
+  "description": "Twenty-two coordinated skills and standard-library scripts for generating production-ready Kotlin Multiplatform repositories or incrementally splitting, integrating, decoupling, testing, and safely consolidating Android, Kotlin Multiplatform, JVM, and mixed Kotlin/Gradle modules with project-specific DI, data, persistence, resource, native-framework, and build-performance guardrails.",
   "skills": [
     "create-kmp-repository",
     "modularize-kotlin-codebase",
@@ -10,13 +10,21 @@
     "extract-kotlin-foundations",
     "scaffold-kotlin-feature",
     "migrate-kotlin-feature",
+    "modularize-kotlin-dependency-injection",
+    "integrate-kotlin-feature",
+    "decouple-kotlin-features",
+    "migrate-kotlin-data-boundaries",
+    "migrate-kotlin-tests",
+    "migrate-compose-resources",
+    "migrate-kotlin-persistence-boundaries",
     "migrate-to-navigation3",
     "break-kotlin-module-cycles",
     "extract-kmp-platform-boundaries",
     "harden-kotlin-module-apis",
     "audit-kotlin-native-framework",
     "verify-kotlin-modules",
-    "measure-kotlin-modular-build-performance"
+    "measure-kotlin-modular-build-performance",
+    "consolidate-kotlin-modules"
   ],
   "install": {
     "repository_destination": ".agents/skills",

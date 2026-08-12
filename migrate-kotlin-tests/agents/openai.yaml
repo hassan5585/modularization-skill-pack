@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate Kotlin Tests"
+  short_description: "Move tests and reusable fakes safely"
+  default_prompt: "Use $migrate-kotlin-tests to plan test moves and verification for affected modules."

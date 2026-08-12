@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "target_module": ":feature:orders:data",
+  "allowed_modules": [":core:data", ":feature:orders:data"],
+  "preserve_schema": true,
+  "expected_database_versions": {
+    "AppDatabase": 12
+  },
+  "required_schema_paths": ["schemas/com.example.AppDatabase/12.json"]
+}

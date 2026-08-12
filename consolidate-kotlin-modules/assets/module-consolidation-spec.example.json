@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "source_modules": [":feature:orders:navigation", ":feature:orders:domain"],
+  "target_module": ":feature:orders:domain",
+  "reason": "The route contracts are inseparable from the domain API and build metrics show no isolated recompilation benefit.",
+  "evidence": {
+    "build_metrics": ".modularization/build-metrics/comparison.json",
+    "ownership": "Same team and release cadence"
+  },
+  "preserve_public_api": true,
+  "preserve_schema": true
+}

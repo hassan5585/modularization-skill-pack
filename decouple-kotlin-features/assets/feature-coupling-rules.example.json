@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "allowed_edges": [
+    {
+      "source": ":feature:checkout:ui",
+      "target": ":feature:orders:navigation",
+      "reason": "Checkout intentionally launches the provider-owned order flow."
+    }
+  ],
+  "shared_ui_consumers": [
+    {
+      "consumer": ":feature:checkout:ui",
+      "provider": ":feature:orders:shared-ui"
+    }
+  ]
+}

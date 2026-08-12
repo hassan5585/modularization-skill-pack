@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integrate Kotlin Feature"
+  short_description: "Wire feature modules into the app shell"
+  default_prompt: "Use $integrate-kotlin-feature to audit and complete feature app, DI, and navigation wiring."

@@ -1,11 +1,12 @@
 # Portable Kotlin modularization skill pack
 
-Fourteen coordinated skills generate production-ready Kotlin Multiplatform
-repositories or orchestrate, audit, design, extract foundations, scaffold and
-migrate features, optionally migrate Compose Navigation 2 to Navigation 3,
-break module cycles, separate platform boundaries, harden APIs, measure build
-performance, and verify an incremental layered modularization of Android,
-Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repositories. The pack
+Twenty-two coordinated skills generate production-ready Kotlin Multiplatform
+repositories or orchestrate, audit, design, extract foundations, scaffold,
+migrate, integrate, decouple, and safely consolidate features and modules. The
+pack includes focused DI, data, persistence, test, and Compose-resource boundary
+workflows; optional Compose Navigation 2-to-3 migration; cycle/platform/API
+remediation; build-performance measurement; and architecture verification for
+Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repositories. The pack
 supports optional feature-owned `shared-ui` modules without permitting
 shared-UI dependency chains. For KMP projects it also guards the Kotlin/Native
 dependency and Swift export surface, including generated framework headers.
@@ -24,12 +25,18 @@ Existing repository
   -> design-gradle-conventions
   -> extract-kotlin-foundations
   -> migrate-kotlin-feature  (scaffolds via scaffold-kotlin-feature)
+      -> migrate-kotlin-data-boundaries / migrate-kotlin-persistence-boundaries
+      -> migrate-kotlin-tests / migrate-compose-resources
+      -> modularize-kotlin-dependency-injection
+      -> integrate-kotlin-feature
+  -> decouple-kotlin-features
   -> migrate-to-navigation3  (optional; only when Nav3 migration is requested)
   -> break-kotlin-module-cycles
   -> extract-kmp-platform-boundaries
   -> harden-kotlin-module-apis
   -> verify-kotlin-modules
   -> measure-kotlin-modular-build-performance
+  -> consolidate-kotlin-modules  (optional; evidence required)
 
 New KMP repository
   -> create-kmp-repository
@@ -54,6 +61,14 @@ destructive or irreversible steps.
 | Only a plan / inventory, no file moves | `$audit-kotlin-architecture` | optional `$measure-kotlin-modular-build-performance` |
 | One new feature skeleton in a modular repo | `$scaffold-kotlin-feature` | `$verify-kotlin-modules` |
 | To pull one existing feature out of the monolith | `$migrate-kotlin-feature` | `$break-kotlin-module-cycles`, `$verify-kotlin-modules` |
+| To finish settings/app/DI/navigation wiring | `$integrate-kotlin-feature` | `$modularize-kotlin-dependency-injection`, `$verify-kotlin-modules` |
+| To move or repair DI graphs/scopes/bindings | `$modularize-kotlin-dependency-injection` | `$integrate-kotlin-feature`, `$verify-kotlin-modules` |
+| To remove undesirable acyclic feature coupling | `$decouple-kotlin-features` | `$migrate-compose-resources`, `$verify-kotlin-modules` |
+| To move repositories, DTOs, serializers, or caches | `$migrate-kotlin-data-boundaries` | `$migrate-kotlin-persistence-boundaries`, `$harden-kotlin-module-apis` |
+| To move tests, fixtures, or reusable fakes | `$migrate-kotlin-tests` | `$verify-kotlin-modules` |
+| To move Compose/Android resources | `$migrate-compose-resources` | `$verify-kotlin-modules` |
+| To move Room/SQLDelight/DataStore ownership | `$migrate-kotlin-persistence-boundaries` | `$migrate-kotlin-data-boundaries`, `$verify-kotlin-modules` |
+| To merge evidence-backed over-fragmented modules | `$consolidate-kotlin-modules` | `$measure-kotlin-modular-build-performance`, `$verify-kotlin-modules` |
 | To migrate Compose Navigation 2 → 3 | `$migrate-to-navigation3` | `$verify-kotlin-modules` (after cutover) |
 | To fix feature↔feature or layer cycles | `$break-kotlin-module-cycles` | `$verify-kotlin-modules` |
 | To clean Android/iOS leaks out of `commonMain` | `$extract-kmp-platform-boundaries` | `$verify-kotlin-modules` |
@@ -325,7 +340,42 @@ Kotlin host rewrites stay agent-driven.
 
 ---
 
-### 15. Common multi-skill playbooks (pick one goal)
+### 15. Focused boundary and integration workflows
+
+**Finish a scaffolded feature:**
+
+> Use `$integrate-kotlin-feature` for `orders`. Audit settings, app dependencies,
+> DI, navigation, serializers, and app-shell registration; plan missing surfaces,
+> apply only reviewed wiring, then run `check` and app verification.
+
+**Move a complex data feature:**
+
+> Use `$migrate-kotlin-data-boundaries` to snapshot repository and wire contracts,
+> `$migrate-kotlin-persistence-boundaries` for Room/SQLDelight/DataStore code,
+> `$migrate-kotlin-tests` for tests/fakes, and `$migrate-compose-resources` for UI
+> resources. Preserve every wire, schema, stored-key, and resource identity.
+
+**Remove cross-feature implementation coupling:**
+
+> Use `$decouple-kotlin-features` to classify every production cross-feature
+> edge. Propose provider shared UI, navigation/domain contracts, ports/events, or
+> an exact reviewed allowance without inventing a catch-all core module.
+
+**Repair graph ownership after module moves:**
+
+> Use `$modularize-kotlin-dependency-injection`; preserve the detected DI
+> framework, scopes, qualifiers, multibinding keys, assisted parameters, and
+> platform graph entry points.
+
+**Consolidate an over-fragmented graph:**
+
+> Use `$consolidate-kotlin-modules` only with build/coupling evidence. Simulate
+> the replacement graph, preserve public/resource/schema/native contracts, and
+> compare the same build-metric scenarios afterward.
+
+---
+
+### 16. Common multi-skill playbooks (pick one goal)
 
 **“We have a monolith and want a pilot only.”**
 
@@ -335,6 +385,8 @@ $audit-kotlin-architecture
   -> $design-gradle-conventions (if conventions are missing)
   -> $extract-kotlin-foundations (only what the pilot needs)
   -> $migrate-kotlin-feature (pilot)
+  -> focused data/persistence/test/resource/DI skills as evidenced
+  -> $integrate-kotlin-feature
   -> $verify-kotlin-modules
 ```
 
@@ -361,6 +413,7 @@ $harden-kotlin-module-apis
 $measure-kotlin-modular-build-performance (baseline vs current)
   -> $audit-kotlin-architecture (hotspots / fan-out)
   -> $harden-kotlin-module-apis (accidental api / export edges)
+  -> $consolidate-kotlin-modules (only with reviewed evidence)
 ```
 
 **“PR review: did this feature respect the architecture?”**
@@ -373,7 +426,7 @@ $verify-kotlin-modules
 
 ---
 
-### 16. What *not* to ask these skills to do
+### 17. What *not* to ask these skills to do
 
 These skills **preserve** the target project’s UI, DI, networking, persistence,
 navigation, serialization, and test stack unless you explicitly request a

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Migrate Kotlin Data Boundaries"
+  short_description: "Move repositories and wire models safely"
+  default_prompt: "Use $migrate-kotlin-data-boundaries to plan a behavior-preserving data-layer module migration."

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "moves": [
+    {
+      "type": "string",
+      "key": "orders_title",
+      "from_module": ":legacy",
+      "to_module": ":feature:orders:ui",
+      "preserve_key": true
+    }
+  ],
+  "public_resource_modules": [":core:ui"]
+}
