@@ -1,0 +1,4 @@
+interface:
+  display_name: "Standardize Kotlin Destinations"
+  short_description: "Adopt Destination NavKey route contracts"
+  default_prompt: "Use $standardize-kotlin-destinations to audit this repository’s route types, introduce the Destination NavKey contract if it is missing, convert existing AppRoute or Screen types onto Destination, and check destinationId, SerialName, primitive parameters, and serializer registration."

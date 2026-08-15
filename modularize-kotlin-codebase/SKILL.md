@@ -31,6 +31,7 @@ Use these sibling skills when they are installed (typical brownfield order):
 18. `$measure-kotlin-modular-build-performance` — optional baseline/completion build metrics.
 19. `$consolidate-kotlin-modules` — optional evidence-backed remediation when the resulting graph is over-fragmented.
 20. `$migrate-to-navigation3` — **optional modernization only when Navigation 3 migration is explicitly requested**; not part of default modularization order. Greenfield `$create-kmp-repository` apps already use Navigation 3.
+21. `$standardize-kotlin-destinations` — **optional** after Nav3 (or on an already-Nav3 app) when the repository should adopt the Destination `NavKey` contract; not part of default modularization order.
 
 If a sibling is unavailable, follow the same phase in this skill and use its artifacts only when present. Do not invent findings that require repository inspection.
 

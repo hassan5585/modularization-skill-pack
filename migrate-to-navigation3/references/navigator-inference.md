@@ -11,8 +11,8 @@ conservative: only APIs justified by audit evidence are enabled.
 | Only concrete typed routes, no shared base | Type against `NavKey` |
 | String routes only | Plan a string→typed phase first; contract type becomes the new base or `NavKey` |
 
-**Never** introduce or require a class named `Destination`. That name is not
-part of this skill’s contract (even if some repositories use it).
+**Never** introduce or require a class named `Destination` in this skill.
+Adopt that contract later with `$standardize-kotlin-destinations`.
 
 ## Always generated
 

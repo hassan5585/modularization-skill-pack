@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "generator": {
+    "skill": "standardize-kotlin-destinations",
+    "script": "standardize_destinations.py",
+    "version": "1"
+  },
+  "repository": {
+    "root": ".",
+    "revision": null
+  },
+  "inputs": {
+    "audit": ".modularization/destination-audit.json"
+  },
+  "project": {
+    "platform": "kmp",
+    "source_sets": ["commonMain", "androidMain", "iosMain"],
+    "has_navigation3": true,
+    "has_navigation2": false
+  },
+  "destination": {
+    "exists": false,
+    "introduce": true,
+    "type_name": "Destination",
+    "module_path": ":core:navigation",
+    "module_directory": "core/navigation",
+    "package": "com.example.core.navigation",
+    "source_set": "commonMain",
+    "keeps_existing_name": false,
+    "existing_base_type": {
+      "name": "AppRoute",
+      "package": "com.example.core.navigation",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/AppRoute.kt"
+    },
+    "files": {
+      "destination": "Destination.kt",
+      "serializers": "DestinationSerializers.kt"
+    }
+  },
+  "id_scheme": "feature.screen_name",
+  "conversions": [
+    {
+      "from": "AppRoute",
+      "strategy": "implement-destination",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/AppRoute.kt"
+    }
+  ],
+  "leaves": [
+    {
+      "name": "Home",
+      "qualified": "AppRoute.Home",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/AppRoute.kt",
+      "serial_name": null,
+      "destination_id": null,
+      "suggested_id": "app.home"
+    },
+    {
+      "name": "Detail",
+      "qualified": "AppRoute.Detail",
+      "path": "core/navigation/src/commonMain/kotlin/com/example/core/navigation/AppRoute.kt",
+      "serial_name": null,
+      "destination_id": null,
+      "suggested_id": "app.detail"
+    }
+  ],
+  "unresolved": [],
+  "gates": {
+    "navigation3_runtime": "pass",
+    "destination_module": "pass",
+    "destination_contract": "fail",
+    "serial_names": "fail",
+    "destination_ids": "fail",
+    "primitive_params": "pass",
+    "serializer_registration": "fail",
+    "ownership": "review"
+  },
+  "recommendations": [
+    "Introduce Destination in :core:navigation and convert AppRoute onto it."
+  ]
+}

@@ -6,6 +6,10 @@ Use `core:domain`, `core:data`, `core:navigation`, and `core:ui` only for
 **stable, app-wide** contracts and infrastructure. High fan-in is a signal to
 investigate, never sufficient evidence by itself.
 
+`core:navigation` may own the app-wide `Destination : NavKey` interface.
+Feature destinations stay in feature navigation modules. Introduce or check
+that contract with `$standardize-kotlin-destinations`.
+
 ## Reject
 
 - Feature screens, ViewModels, destinations, and repositories in core

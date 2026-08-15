@@ -91,6 +91,7 @@ Do not ask about frameworks, module shapes, variants, test libraries, or tooling
 Use the installed sibling skills rather than improvising structure:
 
 - `$scaffold-kotlin-feature` to add new product capabilities (domain/data/navigation/UI and optional shared-ui/test).
+- `$standardize-kotlin-destinations` to introduce or check the Destination contract in an existing (non-generated) repository. The template already includes Destination.
 - `$migrate-kotlin-feature` only when extracting behavior from an existing monolith path.
 - `$design-gradle-conventions` to add new build capabilities.
 - `$extract-kmp-platform-boundaries` and `$harden-kotlin-module-apis` when validating or extending the template boundaries.

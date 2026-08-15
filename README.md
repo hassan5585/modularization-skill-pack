@@ -1,12 +1,13 @@
 # Portable Kotlin modularization skill pack
 
-Twenty-two coordinated skills generate production-ready Kotlin Multiplatform
+Twenty-three coordinated skills generate production-ready Kotlin Multiplatform
 repositories or orchestrate, audit, design, extract foundations, scaffold,
 migrate, integrate, decouple, and safely consolidate features and modules. The
 pack includes focused DI, data, persistence, test, and Compose-resource boundary
-workflows; optional Compose Navigation 2-to-3 migration; cycle/platform/API
-remediation; build-performance measurement; and architecture verification for
-Android, Kotlin Multiplatform, JVM, or mixed Kotlin/Gradle repositories. The pack
+workflows; optional Compose Navigation 2-to-3 migration; Destination route-key
+standardization; cycle/platform/API remediation; build-performance measurement;
+and architecture verification for Android, Kotlin Multiplatform, JVM, or mixed
+Kotlin/Gradle repositories. The pack
 supports optional feature-owned `shared-ui` modules without permitting
 shared-UI dependency chains. For KMP projects it also guards the Kotlin/Native
 dependency and Swift export surface, including generated framework headers.
@@ -31,6 +32,7 @@ Existing repository
       -> integrate-kotlin-feature
   -> decouple-kotlin-features
   -> migrate-to-navigation3  (optional; only when Nav3 migration is requested)
+  -> standardize-kotlin-destinations  (optional; Destination NavKey contract)
   -> break-kotlin-module-cycles
   -> extract-kmp-platform-boundaries
   -> harden-kotlin-module-apis
@@ -69,7 +71,8 @@ destructive or irreversible steps.
 | To move Compose/Android resources | `$migrate-compose-resources` | `$verify-kotlin-modules` |
 | To move Room/SQLDelight/DataStore ownership | `$migrate-kotlin-persistence-boundaries` | `$migrate-kotlin-data-boundaries`, `$verify-kotlin-modules` |
 | To merge evidence-backed over-fragmented modules | `$consolidate-kotlin-modules` | `$measure-kotlin-modular-build-performance`, `$verify-kotlin-modules` |
-| To migrate Compose Navigation 2 → 3 | `$migrate-to-navigation3` | `$verify-kotlin-modules` (after cutover) |
+| To migrate Compose Navigation 2 → 3 | `$migrate-to-navigation3` | `$standardize-kotlin-destinations`, `$verify-kotlin-modules` |
+| To adopt Destination route keys | `$standardize-kotlin-destinations` | `$verify-kotlin-modules` |
 | To fix feature↔feature or layer cycles | `$break-kotlin-module-cycles` | `$verify-kotlin-modules` |
 | To clean Android/iOS leaks out of `commonMain` | `$extract-kmp-platform-boundaries` | `$verify-kotlin-modules` |
 | To shrink `api` edges / public Kotlin surface | `$harden-kotlin-module-apis` | `$audit-kotlin-native-framework` (if iOS) |
@@ -331,8 +334,9 @@ apps from `$create-kmp-repository` already use Navigation 3.
 > for review of `.modularization/navigation3-spec.json`, then scaffold the
 > app-owned Navigator (preview first). Do not rewrite NavHost automatically.
 > Preserve route identity; use our existing route base type or `NavKey` — do not
-> invent a `Destination` type. After ViewModels use Navigator, plan an atomic
-> NavDisplay cutover and run `check`.
+> invent a `Destination` type during Nav3 migration. After ViewModels use
+> Navigator, plan an atomic NavDisplay cutover and run `check`. Then use
+> `$standardize-kotlin-destinations` if we want the Destination convention.
 
 **What you get:** inventory of Nav2 usage, a reviewed migration spec, optional
 Navigator/options/recording-fake scaffold, and a post-migration residual check.
@@ -340,7 +344,27 @@ Kotlin host rewrites stay agent-driven.
 
 ---
 
-### 15. Focused boundary and integration workflows
+### 15. Adopt Destination route contracts
+
+Use on an already-Nav3 app (or after `$migrate-to-navigation3`) when the
+repository should match the `$create-kmp-repository` Destination convention.
+Greenfield apps already have Destination.
+
+**Agent prompt:**
+
+> Use `$standardize-kotlin-destinations` on this repository. Run `audit` and
+> `plan`, stop for review of `.modularization/destination-spec.json`, then
+> scaffold `Destination.kt` if it is missing (preview first). Convert existing
+> `AppRoute` / `Screen` types onto Destination without changing serial names.
+> Keep parameters primitive. Register serializers explicitly. Run `check`.
+
+**What you get:** inventory of route keys, a reviewed destination-spec, optional
+`Destination` + serializer-stub scaffold, and a convention check. Feature
+destination rewrites stay agent-driven.
+
+---
+
+### 16. Focused boundary and integration workflows
 
 **Finish a scaffolded feature:**
 
@@ -375,7 +399,7 @@ Kotlin host rewrites stay agent-driven.
 
 ---
 
-### 16. Common multi-skill playbooks (pick one goal)
+### 17. Common multi-skill playbooks (pick one goal)
 
 **“We have a monolith and want a pilot only.”**
 
@@ -397,6 +421,14 @@ $create-kmp-repository
   -> $scaffold-kotlin-feature (repeat)
   -> $verify-kotlin-modules
   -> $audit-kotlin-native-framework (after public/iOS bridge changes)
+```
+
+**“Nav3 host is done; adopt Destination keys.”**
+
+```text
+$migrate-to-navigation3 (if still on Nav2)
+  -> $standardize-kotlin-destinations
+  -> $verify-kotlin-modules
 ```
 
 **“Release readiness for a KMP app shell.”**
@@ -426,7 +458,7 @@ $verify-kotlin-modules
 
 ---
 
-### 17. What *not* to ask these skills to do
+### 18. What *not* to ask these skills to do
 
 These skills **preserve** the target project’s UI, DI, networking, persistence,
 navigation, serialization, and test stack unless you explicitly request a
@@ -489,6 +521,7 @@ to public declarations, dependency visibility, or native interop.
 | `scaffold-kotlin-feature` | Create empty layered feature modules in a modular repo |
 | `migrate-kotlin-feature` | Move one real feature slice into those modules |
 | `migrate-to-navigation3` | Audit/plan/scaffold/check Compose Navigation 2 → 3 migration |
+| `standardize-kotlin-destinations` | Adopt Destination NavKey, destinationId, SerialName, and serializers |
 | `break-kotlin-module-cycles` | Detect cycles and plan reviewed edge cuts |
 | `extract-kmp-platform-boundaries` | Separate portable common code from platform implementations |
 | `harden-kotlin-module-apis` | Narrow public Kotlin surface and accidental `api` edges |

@@ -26,7 +26,7 @@ verification in one Python script; project-specific Kotlin migration remains
 - Broad automatic source rewrites by the script
 - Changing route identity or user-visible navigation unless the user requests it
 - Generating Metro / Koin / Hilt DI bindings
-- Requiring or inventing a class named `Destination` (YSN-specific)
+- Requiring or inventing a class named `Destination` (owned by `$standardize-kotlin-destinations`)
 
 ## Non-goals
 
@@ -127,7 +127,8 @@ Scaffold creates only reviewed files (never overwrites):
 Rules:
 
 - Reuse an existing app route base type when available and make it a `NavKey`.
-- Otherwise type the contract against `NavKey`; **never** introduce `Destination`.
+- Otherwise type the contract against `NavKey`; **never** introduce `Destination` here.
+  Adopt Destination after cutover with `$standardize-kotlin-destinations`.
 - Place files in the approved core/shared navigation module from the spec.
 - If a new module is required, stop and invoke `$extract-kotlin-foundations`.
 - Preserve the repository DI system; wire bindings manually in the project style.
@@ -198,7 +199,7 @@ Stop and request direction when:
 
 - [ ] `navigation3-audit` / `navigation3-spec` / `navigation3-check` artifacts valid
 - [ ] No unsupported-scope findings left unaddressed
-- [ ] Navigator uses existing route base or `NavKey` — no required `Destination`
+- [ ] Navigator uses existing route base or `NavKey` — Destination is optional and owned by `$standardize-kotlin-destinations`
 - [ ] ViewModels do not import or hold `NavController`
 - [ ] Hosts use Navigation 3 display/entry APIs
 - [ ] Route keys serializable where saveable back stack is required

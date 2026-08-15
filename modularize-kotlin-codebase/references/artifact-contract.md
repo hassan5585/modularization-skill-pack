@@ -33,6 +33,9 @@ Use JSON with `schema_version: 1`. Treat paths as repository-relative POSIX path
 ├── navigation3-audit.json    # optional; migrate-to-navigation3
 ├── navigation3-spec.json
 ├── navigation3-check.json
+├── destination-audit.json    # optional; standardize-kotlin-destinations
+├── destination-spec.json
+├── destination-check.json
 ├── work-state.json
 ├── worklog.md
 ├── receipts/

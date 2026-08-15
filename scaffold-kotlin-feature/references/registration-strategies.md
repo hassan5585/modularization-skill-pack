@@ -17,6 +17,8 @@ pattern. Typical reviewed steps:
 2. Register feature DI containers with the existing graph/container API.
 3. Register navigation graphs beside other feature graphs.
 4. Add destination serializers and preferences when the project requires them.
+   When `Destination` exists, author `{Name}Destination` types per
+   `$standardize-kotlin-destinations`.
 
 ## Resources
 
